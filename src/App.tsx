@@ -15,7 +15,7 @@ function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
-
+  // Add
   useEffect(() => {
     let mounted = true;
 
