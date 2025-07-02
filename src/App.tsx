@@ -15,7 +15,7 @@ function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
-  // Add
+
   useEffect(() => {
     let mounted = true;
 
@@ -25,6 +25,11 @@ function App() {
         const currentUser = await AuthService.getCurrentUser();
         if (mounted) {
           setUser(currentUser);
+          
+          // Aplicar tema se disponível
+          if (currentUser?.profile?.tema) {
+            AuthService.applyTheme(currentUser.profile.tema);
+          }
         }
       } catch (error) {
         console.error('Error checking user:', error);

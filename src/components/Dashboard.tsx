@@ -10,7 +10,10 @@ import {
   CreditCard,
   AlertCircle,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  Bell,
+  Clock,
+  Zap
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts';
 import { DatabaseService } from '../lib/database';
@@ -28,9 +31,9 @@ interface DashboardProps {
   onNavigate?: (page: string) => void;
 }
 
-function StatCard({ title, value, icon: Icon, trend, color, subtitle, loading = false }: any) {
+function StatCard({ title, value, icon: Icon, trend, color, subtitle, loading = false, alert = false }: any) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-all duration-300">
+    <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-all duration-300 ${alert ? 'ring-2 ring-red-200 bg-red-50' : ''}`}>
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
@@ -42,11 +45,19 @@ function StatCard({ title, value, icon: Icon, trend, color, subtitle, loading = 
           {subtitle && (
             <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
           )}
+          {alert && (
+            <div className="flex items-center space-x-1 mt-2">
+              <AlertCircle className="w-4 h-4 text-red-500" />
+              <span className="text-xs text-red-600">Atenção necessária</span>
+            </div>
+          )}
         </div>
         <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
+          alert ? 'bg-red-100' :
           trend === 'up' ? 'bg-green-50' : trend === 'down' ? 'bg-red-50' : 'bg-blue-50'
         }`}>
           <Icon className={`w-7 h-7 ${
+            alert ? 'text-red-600' :
             trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-blue-600'
           }`} />
         </div>
@@ -55,12 +66,17 @@ function StatCard({ title, value, icon: Icon, trend, color, subtitle, loading = 
   );
 }
 
-function QuickActionCard({ title, description, icon: Icon, color, onClick }: any) {
+function QuickActionCard({ title, description, icon: Icon, color, onClick, badge }: any) {
   return (
     <button
       onClick={onClick}
-      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-all duration-300 text-left group w-full"
+      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-all duration-300 text-left group w-full relative"
     >
+      {badge && (
+        <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold">
+          {badge}
+        </div>
+      )}
       <div className="flex items-center space-x-4">
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
           <Icon className="w-6 h-6 text-white" />
@@ -74,6 +90,42 @@ function QuickActionCard({ title, description, icon: Icon, color, onClick }: any
   );
 }
 
+function AlertCard({ title, message, type, action }: any) {
+  const colors = {
+    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+    danger: 'bg-red-50 border-red-200 text-red-800',
+    info: 'bg-blue-50 border-blue-200 text-blue-800'
+  };
+
+  const icons = {
+    warning: AlertCircle,
+    danger: AlertCircle,
+    info: Bell
+  };
+
+  const Icon = icons[type];
+
+  return (
+    <div className={`rounded-lg border p-4 ${colors[type]}`}>
+      <div className="flex items-start space-x-3">
+        <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <h4 className="font-medium">{title}</h4>
+          <p className="text-sm mt-1">{message}</p>
+          {action && (
+            <button
+              onClick={action.onClick}
+              className="text-sm font-medium underline mt-2 hover:no-underline"
+            >
+              {action.label}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard({ onNavigate }: DashboardProps) {
   const [data, setData] = useState<DashboardData>({
     lancamentos: [],
@@ -83,16 +135,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [timeRange, setTimeRange] = useState('month'); // month, quarter, year
+  const [timeRange, setTimeRange] = useState('month');
+  const [alerts, setAlerts] = useState<any[]>([]);
 
   useEffect(() => {
     loadDashboardData();
   }, [timeRange]);
 
-  // Recarregar dados a cada 30 segundos para manter sincronizado
   useEffect(() => {
     const interval = setInterval(() => {
-      loadDashboardData(true); // Silent refresh
+      loadDashboardData(true);
     }, 30000);
 
     return () => clearInterval(interval);
@@ -105,7 +157,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       }
       setRefreshing(true);
       
-      // Calcular datas baseado no período selecionado
       const hoje = new Date();
       let dataInicio: string;
       
@@ -116,7 +167,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         case 'year':
           dataInicio = new Date(hoje.getFullYear(), 0, 1).toISOString().split('T')[0];
           break;
-        default: // month
+        default:
           dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split('T')[0];
       }
       
@@ -130,9 +181,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       ]);
 
       setData({ lancamentos, categorias, contas, metas });
+      
+      // Gerar alertas
+      generateAlerts({ lancamentos, categorias, contas, metas });
+      
     } catch (error) {
       console.error('Erro ao carregar dados do dashboard:', error);
-      // Handle authentication errors
       if (error instanceof Error && error.message === 'Usuário não autenticado') {
         await AuthService.signOut();
         return;
@@ -141,6 +195,64 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const generateAlerts = (data: DashboardData) => {
+    const newAlerts: any[] = [];
+    
+    // Alertas de cartão de crédito próximo do limite
+    data.contas.forEach(conta => {
+      if (conta.tipo === 'CARTAO_CREDITO' && conta.limite_credito) {
+        const utilizacao = (conta.saldo_atual / conta.limite_credito) * 100;
+        if (utilizacao > 80) {
+          newAlerts.push({
+            type: 'warning',
+            title: 'Limite do cartão próximo',
+            message: `${conta.nome} está com ${utilizacao.toFixed(1)}% do limite utilizado`,
+            action: {
+              label: 'Ver conta',
+              onClick: () => onNavigate?.('contas')
+            }
+          });
+        }
+      }
+    });
+
+    // Alertas de lançamentos pendentes
+    const pendentes = data.lancamentos.filter(l => l.status === 'PENDENTE');
+    if (pendentes.length > 0) {
+      newAlerts.push({
+        type: 'info',
+        title: `${pendentes.length} lançamento${pendentes.length > 1 ? 's' : ''} pendente${pendentes.length > 1 ? 's' : ''}`,
+        message: 'Você tem transações aguardando confirmação',
+        action: {
+          label: 'Revisar',
+          onClick: () => onNavigate?.('lancamentos')
+        }
+      });
+    }
+
+    // Alertas de metas próximas do vencimento
+    const hoje = new Date();
+    const metasVencendo = data.metas.filter(meta => {
+      const dataFim = new Date(meta.data_fim);
+      const diasRestantes = Math.ceil((dataFim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+      return diasRestantes <= 7 && diasRestantes > 0 && meta.status === 'ATIVA';
+    });
+
+    if (metasVencendo.length > 0) {
+      newAlerts.push({
+        type: 'warning',
+        title: 'Metas próximas do vencimento',
+        message: `${metasVencendo.length} meta${metasVencendo.length > 1 ? 's' : ''} vence${metasVencendo.length > 1 ? 'm' : ''} em breve`,
+        action: {
+          label: 'Ver metas',
+          onClick: () => onNavigate?.('metas')
+        }
+      });
+    }
+
+    setAlerts(newAlerts);
   };
 
   const handleQuickAction = (action: string) => {
@@ -195,7 +307,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         porcentagem: (grupo.valor / totalDespesas) * 100,
       }))
       .sort((a, b) => b.valor - a.valor)
-      .slice(0, 6); // Top 6 categorias
+      .slice(0, 6);
   }, [data.lancamentos, data.categorias]);
 
   const ultimosLancamentos = useMemo(() => {
@@ -215,6 +327,10 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const saldoTotalContas = useMemo(() => {
     return data.contas.reduce((sum, conta) => sum + conta.saldo_atual, 0);
   }, [data.contas]);
+
+  const pendentesCount = useMemo(() => {
+    return data.lancamentos.filter(l => l.status === 'PENDENTE').length;
+  }, [data.lancamentos]);
 
   const getTimeRangeLabel = () => {
     switch (timeRange) {
@@ -255,6 +371,21 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </div>
       </div>
 
+      {/* Alertas */}
+      {alerts.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
+            <Bell className="w-5 h-5" />
+            <span>Alertas Importantes</span>
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {alerts.map((alert, index) => (
+              <AlertCard key={index} {...alert} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Stats Cards */}
       <div>
         <div className="flex items-center justify-between mb-6">
@@ -271,6 +402,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             trend={resumoFinanceiro.saldo >= 0 ? 'up' : 'down'}
             subtitle={`${data.lancamentos.length} transações`}
             loading={loading}
+            alert={resumoFinanceiro.saldo < 0}
           />
           <StatCard
             title="Receitas"
@@ -327,11 +459,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             onClick={() => handleQuickAction('contas')}
           />
           <QuickActionCard
-            title="Nova Categoria"
-            description="Organizar transações"
-            icon={BarChart3}
+            title="Revisar Pendentes"
+            description="Confirmar transações"
+            icon={Clock}
             color="bg-orange-600"
-            onClick={() => handleQuickAction('categorias')}
+            onClick={() => handleQuickAction('lancamentos')}
+            badge={pendentesCount > 0 ? pendentesCount : null}
           />
         </div>
       </div>
@@ -371,6 +504,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   <Tooltip
                     formatter={(value: number) => formatCurrency(value)}
                     labelFormatter={(label) => `Categoria: ${label}`}
+                    contentStyle={{
+                      backgroundColor: 'var(--bg-primary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      color: 'var(--text-primary)'
+                    }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -437,7 +576,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 truncate">{lancamento.descricao}</p>
+                        <div className="flex items-center space-x-2">
+                          <p className="font-medium text-gray-900 truncate">{lancamento.descricao}</p>
+                          {lancamento.status === 'PENDENTE' && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Pendente
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-gray-500">
                           {formatDate(lancamento.data)} • {categoria?.nome}
                         </p>
@@ -545,26 +691,49 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             </div>
           ) : data.contas.length > 0 ? (
             <div className="space-y-3">
-              {data.contas.slice(0, 5).map((conta) => (
-                <div key={conta.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                      <CreditCard className="w-5 h-5 text-blue-600" />
+              {data.contas.slice(0, 5).map((conta) => {
+                const isCartaoCredito = conta.tipo === 'CARTAO_CREDITO';
+                const utilizacao = isCartaoCredito && conta.limite_credito 
+                  ? (Math.abs(conta.saldo_atual) / conta.limite_credito) * 100 
+                  : 0;
+                const alertaLimite = utilizacao > 80;
+                
+                return (
+                  <div key={conta.id} className={`flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors ${alertaLimite ? 'bg-red-50 border border-red-200' : ''}`}>
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${alertaLimite ? 'bg-red-100' : 'bg-blue-50'}`}>
+                        <CreditCard className={`w-5 h-5 ${alertaLimite ? 'text-red-600' : 'text-blue-600'}`} />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <p className="font-medium text-gray-900">{conta.nome}</p>
+                          {alertaLimite && (
+                            <AlertCircle className="w-4 h-4 text-red-500" />
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          {conta.tipo}
+                          {isCartaoCredito && conta.limite_credito && (
+                            <span className="ml-2">• {utilizacao.toFixed(1)}% usado</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{conta.nome}</p>
-                      <p className="text-sm text-gray-500">{conta.tipo}</p>
+                    <div className="text-right">
+                      <p className={`font-semibold ${
+                        conta.saldo_atual >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {formatCurrency(conta.saldo_atual)}
+                      </p>
+                      {isCartaoCredito && conta.limite_credito && (
+                        <p className="text-xs text-gray-500">
+                          Limite: {formatCurrency(conta.limite_credito)}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className={`font-semibold ${
-                      conta.saldo_atual >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {formatCurrency(conta.saldo_atual)}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               
               {data.contas.length > 5 && (
                 <div className="text-center pt-2">

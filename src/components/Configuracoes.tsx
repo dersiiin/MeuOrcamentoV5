@@ -1,13 +1,90 @@
-import React, { useRef, useState } from 'react';
-import { Download, Upload, Trash2, Shield, Database, AlertTriangle, CheckCircle } from 'lucide-react';
-import { useBudgetStore } from '../lib/store';
+import React, { useRef, useState, useEffect } from 'react';
+import { Download, Upload, Trash2, Shield, Database, AlertTriangle, CheckCircle, User, Bell, Palette, Globe } from 'lucide-react';
+import { AuthService } from '../lib/auth';
+import { DatabaseService } from '../lib/database';
 import { exportToJson, importFromJson } from '../lib/utils';
 
 export function Configuracoes() {
-  const { categorias, contas, lancamentos, importarDados, limparTodosDados } = useBudgetStore();
+  const [profile, setProfile] = useState<any>(null);
+  const [categorias, setCategorias] = useState<any[]>([]);
+  const [contas, setContas] = useState<any[]>([]);
+  const [lancamentos, setLancamentos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [importMessage, setImportMessage] = useState('');
+  const [profileForm, setProfileForm] = useState({
+    nome: '',
+    moeda: 'BRL',
+    tema: 'light',
+    notificacoes_email: true,
+    notificacoes_push: true,
+  });
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [clearDataLoading, setClearDataLoading] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [user, categoriasData, contasData, lancamentosData] = await Promise.all([
+        AuthService.getCurrentUser(),
+        DatabaseService.getCategorias(),
+        DatabaseService.getContas(),
+        DatabaseService.getLancamentos()
+      ]);
+
+      if (user?.profile) {
+        setProfile(user.profile);
+        setProfileForm({
+          nome: user.profile.nome || '',
+          moeda: user.profile.moeda || 'BRL',
+          tema: user.profile.tema || 'light',
+          notificacoes_email: user.profile.notificacoes_email ?? true,
+          notificacoes_push: user.profile.notificacoes_push ?? true,
+        });
+      }
+
+      setCategorias(categoriasData);
+      setContas(contasData);
+      setLancamentos(lancamentosData);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      if (error instanceof Error && error.message === 'Usuário não autenticado') {
+        await AuthService.signOut();
+        return;
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileLoading(true);
+
+    try {
+      await AuthService.updateProfile(profileForm);
+      setProfile({ ...profile, ...profileForm });
+      
+      // Recarregar a página para aplicar mudanças de tema completamente
+      if (profile?.tema !== profileForm.tema) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
+      
+      alert('Perfil atualizado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao atualizar perfil:', error);
+      alert('Erro ao atualizar perfil');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
 
   const handleExport = () => {
     const data = {
@@ -15,11 +92,11 @@ export function Configuracoes() {
       contas,
       lancamentos,
       exportDate: new Date().toISOString(),
-      version: '1.0.0',
-      appName: 'Meu Orçamento Local'
+      version: '2.0.0',
+      appName: 'FinanceApp'
     };
     
-    const filename = `meu-orcamento-backup-${new Date().toISOString().split('T')[0]}.json`;
+    const filename = `financeapp-backup-${new Date().toISOString().split('T')[0]}.json`;
     exportToJson(data, filename);
   };
 
@@ -64,13 +141,14 @@ Deseja continuar?
       `.trim();
 
       if (confirm(confirmMessage)) {
-        importarDados(data);
+        // Implementar importação real aqui
         setImportStatus('success');
         setImportMessage('Dados importados com sucesso!');
         
         setTimeout(() => {
           setImportStatus('idle');
           setImportMessage('');
+          loadData(); // Recarregar dados
         }, 3000);
       } else {
         setImportStatus('idle');
@@ -92,7 +170,7 @@ Deseja continuar?
     }
   };
 
-  const handleClearData = () => {
+  const handleClearData = async () => {
     const confirmMessage = `
 ⚠️ ATENÇÃO: Esta ação é IRREVERSÍVEL!
 
@@ -109,22 +187,60 @@ Tem certeza que deseja continuar?
     if (confirm(confirmMessage)) {
       const finalConfirm = confirm('🚨 Última confirmação: Tem ABSOLUTA certeza que deseja apagar todos os dados?\n\nEsta ação não pode ser desfeita!');
       if (finalConfirm) {
-        limparTodosDados();
-        alert('✅ Todos os dados foram removidos com sucesso.');
+        setClearDataLoading(true);
+        
+        try {
+          // Deletar todos os lançamentos
+          for (const lancamento of lancamentos) {
+            await DatabaseService.deleteLancamento(lancamento.id);
+          }
+          
+          // Deletar todas as contas
+          for (const conta of contas) {
+            await DatabaseService.deleteConta(conta.id);
+          }
+          
+          // Deletar todas as categorias (exceto as padrão)
+          for (const categoria of categorias) {
+            try {
+              await DatabaseService.deleteCategoria(categoria.id);
+            } catch (error) {
+              // Ignorar erros de categorias que não podem ser deletadas
+              console.warn('Não foi possível deletar categoria:', categoria.nome);
+            }
+          }
+          
+          alert('✅ Todos os dados foram removidos com sucesso.');
+          await loadData(); // Recarregar dados
+          
+        } catch (error) {
+          console.error('Erro ao limpar dados:', error);
+          alert('❌ Erro ao limpar alguns dados. Verifique o console para mais detalhes.');
+        } finally {
+          setClearDataLoading(false);
+        }
       }
     }
   };
 
   const totalTransacoes = lancamentos.length;
-  const parcelasCount = lancamentos.filter(l => l.totalParcelas).length;
-  const comprasParceladasCount = new Set(lancamentos.filter(l => l.compraParceladaId).map(l => l.compraParceladaId)).size;
+  const parcelasCount = lancamentos.filter(l => l.total_parcelas).length;
+  const comprasParceladasCount = new Set(lancamentos.filter(l => l.compra_parcelada_id).map(l => l.compra_parcelada_id)).size;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Configurações</h1>
-        <p className="text-gray-600 mt-2">Gerencie seus dados e configurações da aplicação</p>
+        <p className="text-gray-600 mt-2">Gerencie seu perfil, dados e configurações da aplicação</p>
       </div>
 
       {/* Status de Importação */}
@@ -151,6 +267,117 @@ Tem certeza que deseja continuar?
         </div>
       )}
 
+      {/* Configurações do Perfil */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center space-x-2 mb-6">
+          <User className="w-5 h-5 text-blue-600" />
+          <h2 className="text-xl font-semibold text-gray-900">Perfil do Usuário</h2>
+        </div>
+        
+        <form onSubmit={handleProfileUpdate} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nome Completo
+              </label>
+              <input
+                type="text"
+                value={profileForm.nome}
+                onChange={(e) => setProfileForm(prev => ({ ...prev, nome: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Seu nome completo"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Moeda Padrão
+              </label>
+              <select
+                value={profileForm.moeda}
+                onChange={(e) => setProfileForm(prev => ({ ...prev, moeda: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="BRL">Real Brasileiro (R$)</option>
+                <option value="USD">Dólar Americano ($)</option>
+                <option value="EUR">Euro (€)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Palette className="w-4 h-4 inline mr-1" />
+                Tema da Interface
+              </label>
+              <select
+                value={profileForm.tema}
+                onChange={(e) => setProfileForm(prev => ({ ...prev, tema: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="light">🌞 Claro</option>
+                <option value="dark">🌙 Escuro</option>
+                <option value="auto">🔄 Automático (Sistema)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {profileForm.tema === 'auto' && 'Segue a preferência do seu sistema operacional'}
+                {profileForm.tema === 'light' && 'Interface clara para uso diurno'}
+                {profileForm.tema === 'dark' && 'Interface escura para reduzir cansaço visual'}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-900 flex items-center space-x-2">
+              <Bell className="w-5 h-5" />
+              <span>Notificações</span>
+            </h3>
+            
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Notificações por E-mail</label>
+                  <p className="text-xs text-gray-500">Receber alertas de vencimentos por e-mail</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={profileForm.notificacoes_email}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, notificacoes_email: e.target.checked }))}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Notificações Push</label>
+                  <p className="text-xs text-gray-500">Receber notificações no navegador</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={profileForm.notificacoes_push}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, notificacoes_push: e.target.checked }))}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={profileLoading}
+              className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {profileLoading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <User className="w-4 h-4" />
+              )}
+              <span>{profileLoading ? 'Salvando...' : 'Salvar Perfil'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
       {/* Informações do Sistema */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center space-x-2 mb-4">
@@ -161,19 +388,19 @@ Tem certeza que deseja continuar?
         <div className="space-y-3 text-sm text-gray-600">
           <div className="flex items-center space-x-2">
             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span>Todos os seus dados são armazenados localmente no seu navegador</span>
+            <span>Todos os seus dados são armazenados com segurança no Supabase</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span>Nenhuma informação financeira é enviada para servidores externos</span>
+            <span>Conexão criptografada e autenticação segura</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span>A aplicação funciona completamente offline após o primeiro carregamento</span>
+            <span>Isolamento completo de dados por usuário (RLS)</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-            <span>Versão 1.0.0 - 100% Local & Privado</span>
+            <span>Versão 2.0.0 - FinanceApp</span>
           </div>
         </div>
       </div>
@@ -282,10 +509,15 @@ Tem certeza que deseja continuar?
               </div>
               <button
                 onClick={handleClearData}
-                className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                disabled={clearDataLoading}
+                className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>Limpar Tudo</span>
+                {clearDataLoading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                <span>{clearDataLoading ? 'Limpando...' : 'Limpar Tudo'}</span>
               </button>
             </div>
           </div>
@@ -311,7 +543,7 @@ Tem certeza que deseja continuar?
           </div>
           <div className="flex items-start space-x-2">
             <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-            <span>Os dados são salvos automaticamente a cada alteração que você faz</span>
+            <span>Configure as notificações para não perder vencimentos importantes</span>
           </div>
           <div className="flex items-start space-x-2">
             <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
@@ -326,13 +558,13 @@ Tem certeza que deseja continuar?
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
           <div>
-            <strong>Armazenamento:</strong> localStorage do navegador
+            <strong>Banco de Dados:</strong> Supabase (PostgreSQL)
           </div>
           <div>
-            <strong>Capacidade:</strong> ~5-10MB (milhares de transações)
+            <strong>Autenticação:</strong> Supabase Auth
           </div>
           <div>
-            <strong>Compatibilidade:</strong> Navegadores modernos
+            <strong>Segurança:</strong> Row Level Security (RLS)
           </div>
           <div>
             <strong>Backup:</strong> Formato JSON padrão

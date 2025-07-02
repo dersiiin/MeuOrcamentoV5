@@ -8,6 +8,46 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
+export function formatCurrencyInput(value: string | number): string {
+  // Se for número, converte para string formatada
+  if (typeof value === 'number') {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+
+  // Remove tudo que não é dígito
+  const numericValue = value.replace(/\D/g, '');
+  
+  // Se vazio, retorna vazio
+  if (!numericValue) return '';
+  
+  // Converte para número (centavos)
+  const numberValue = parseInt(numericValue) / 100;
+  
+  // Formata como moeda brasileira
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(numberValue);
+}
+
+export function parseCurrencyInput(value: string): number {
+  // Remove tudo que não é dígito
+  const numericValue = value.replace(/\D/g, '');
+  
+  // Se vazio, retorna 0
+  if (!numericValue) return 0;
+  
+  // Converte para número (centavos para reais)
+  return parseInt(numericValue) / 100;
+}
+
 export function formatDate(date: string | Date): string {
   const dateObj = typeof date === 'string' ? parseISO(date) : date;
   return format(dateObj, 'dd/MM/yyyy', { locale: ptBR });

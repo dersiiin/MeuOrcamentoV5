@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit3, Trash2, Calendar, DollarSign, Search, Filter, X, CheckCircle, Clock, XCircle, Upload } from 'lucide-react';
 import { DatabaseService } from '../lib/database';
 import { AuthService } from '../lib/auth';
-import { formatCurrency, formatDate, createParcelaLancamentos } from '../lib/utils';
+import { formatCurrency, formatDate, createParcelaLancamentos, parseCurrencyInput } from '../lib/utils';
+import { CurrencyInput } from './Common/CurrencyInput';
 
 export function Lancamentos() {
   const [lancamentos, setLancamentos] = useState<any[]>([]);
@@ -12,6 +13,7 @@ export function Lancamentos() {
   const [showForm, setShowForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingLancamento, setEditingLancamento] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     tipo: 'TODOS' as 'TODOS' | 'RECEITA' | 'DESPESA',
     categoriaId: '',
@@ -52,7 +54,6 @@ export function Lancamentos() {
       setContas(contasData);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      // Handle authentication errors
       if (error instanceof Error && error.message === 'Usuário não autenticado') {
         await AuthService.signOut();
         return;
@@ -69,7 +70,7 @@ export function Lancamentos() {
       errors.descricao = 'Descrição é obrigatória';
     }
     
-    const valor = parseFloat(formData.valor);
+    const valor = parseCurrencyInput(formData.valor);
     if (!formData.valor || isNaN(valor) || valor <= 0) {
       errors.valor = 'Valor deve ser maior que zero';
     }
@@ -98,7 +99,7 @@ export function Lancamentos() {
     }
 
     try {
-      const valor = parseFloat(formData.valor);
+      const valor = parseCurrencyInput(formData.valor);
       const dadosBase = {
         descricao: formData.descricao.trim(),
         valor: valor,
@@ -111,20 +112,23 @@ export function Lancamentos() {
         antecedencia_notificacao: formData.antecedencia_notificacao,
       };
 
-      if (formData.isParcelado && formData.numeroParcelas > 1) {
-        const parcelas = createParcelaLancamentos(dadosBase, formData.numeroParcelas);
-        for (const parcela of parcelas) {
-          await DatabaseService.createLancamento(parcela);
-        }
+      if (editingLancamento) {
+        await DatabaseService.updateLancamento(editingLancamento, dadosBase);
       } else {
-        await DatabaseService.createLancamento(dadosBase);
+        if (formData.isParcelado && formData.numeroParcelas > 1) {
+          const parcelas = createParcelaLancamentos(dadosBase, formData.numeroParcelas);
+          for (const parcela of parcelas) {
+            await DatabaseService.createLancamento(parcela);
+          }
+        } else {
+          await DatabaseService.createLancamento(dadosBase);
+        }
       }
 
       await loadData();
       resetForm();
     } catch (error) {
       console.error('Erro ao salvar lançamento:', error);
-      // Handle authentication errors
       if (error instanceof Error && error.message === 'Usuário não autenticado') {
         await AuthService.signOut();
         return;
@@ -133,13 +137,30 @@ export function Lancamentos() {
     }
   };
 
+  const handleEdit = (lancamento: any) => {
+    setEditingLancamento(lancamento.id);
+    setFormData({
+      descricao: lancamento.descricao,
+      valor: formatCurrency(lancamento.valor),
+      data: lancamento.data,
+      tipo: lancamento.tipo,
+      conta_id: lancamento.conta_id,
+      categoria_id: lancamento.categoria_id,
+      observacoes: lancamento.observacoes || '',
+      status: lancamento.status,
+      antecedencia_notificacao: lancamento.antecedencia_notificacao || 3,
+      isParcelado: false,
+      numeroParcelas: 2,
+    });
+    setShowForm(true);
+  };
+
   const handleStatusChange = async (id: string, novoStatus: 'PENDENTE' | 'CONFIRMADO' | 'CANCELADO') => {
     try {
       await DatabaseService.updateLancamento(id, { status: novoStatus });
       await loadData();
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
-      // Handle authentication errors
       if (error instanceof Error && error.message === 'Usuário não autenticado') {
         await AuthService.signOut();
         return;
@@ -155,7 +176,6 @@ export function Lancamentos() {
         await loadData();
       } catch (error) {
         console.error('Erro ao excluir lançamento:', error);
-        // Handle authentication errors
         if (error instanceof Error && error.message === 'Usuário não autenticado') {
           await AuthService.signOut();
           return;
@@ -181,6 +201,7 @@ export function Lancamentos() {
     });
     setFormErrors({});
     setShowForm(false);
+    setEditingLancamento(null);
   };
 
   const clearFilters = () => {
@@ -198,34 +219,28 @@ export function Lancamentos() {
   const lancamentosFiltrados = useMemo(() => {
     let resultado = lancamentos;
 
-    // Filtro por busca
     if (searchTerm) {
       resultado = resultado.filter(l => 
         l.descricao.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // Filtro por tipo
     if (filters.tipo !== 'TODOS') {
       resultado = resultado.filter(l => l.tipo === filters.tipo);
     }
 
-    // Filtro por status
     if (filters.status !== 'TODOS') {
       resultado = resultado.filter(l => l.status === filters.status);
     }
 
-    // Filtro por categoria
     if (filters.categoriaId) {
       resultado = resultado.filter(l => l.categoria_id === filters.categoriaId);
     }
 
-    // Filtro por conta
     if (filters.contaId) {
       resultado = resultado.filter(l => l.conta_id === filters.contaId);
     }
 
-    // Filtro por período
     if (filters.dataInicio) {
       resultado = resultado.filter(l => l.data >= filters.dataInicio);
     }
@@ -293,7 +308,6 @@ export function Lancamentos() {
       {/* Busca e Filtros */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <div className="flex flex-col sm:flex-row gap-4">
-          {/* Busca */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
@@ -305,7 +319,6 @@ export function Lancamentos() {
             />
           </div>
 
-          {/* Botão de Filtros */}
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center space-x-2 px-4 py-2 rounded-lg border transition-colors ${
@@ -334,7 +347,6 @@ export function Lancamentos() {
           )}
         </div>
 
-        {/* Painel de Filtros */}
         {showFilters && (
           <div className="mt-4 pt-4 border-t border-gray-200">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
@@ -426,7 +438,9 @@ export function Lancamentos() {
         <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">Novo Lançamento</h2>
+              <h2 className="text-xl font-semibold text-gray-900">
+                {editingLancamento ? 'Editar Lançamento' : 'Novo Lançamento'}
+              </h2>
             </div>
             
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -453,15 +467,13 @@ export function Lancamentos() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Valor *
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
+                  <CurrencyInput
                     value={formData.valor}
-                    onChange={(e) => setFormData(prev => ({ ...prev, valor: e.target.value }))}
+                    onChange={(value) => setFormData(prev => ({ ...prev, valor: value }))}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       formErrors.valor ? 'border-red-300' : 'border-gray-300'
                     }`}
-                    placeholder="0,00"
+                    error={!!formErrors.valor}
                   />
                   {formErrors.valor && (
                     <p className="text-red-600 text-sm mt-1">{formErrors.valor}</p>
@@ -491,7 +503,7 @@ export function Lancamentos() {
                     onChange={(e) => setFormData(prev => ({ 
                       ...prev, 
                       tipo: e.target.value as 'RECEITA' | 'DESPESA',
-                      categoria_id: '' // Reset categoria quando muda o tipo
+                      categoria_id: ''
                     }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
@@ -589,7 +601,7 @@ export function Lancamentos() {
                 />
               </div>
 
-              {formData.tipo === 'DESPESA' && (
+              {formData.tipo === 'DESPESA' && !editingLancamento && (
                 <div className="space-y-3">
                   <div className="flex items-center">
                     <input
@@ -623,7 +635,7 @@ export function Lancamentos() {
                         <p className="text-red-600 text-sm mt-1">{formErrors.numeroParcelas}</p>
                       )}
                       <p className="text-sm text-gray-500 mt-1">
-                        Valor por parcela: {formData.valor ? formatCurrency(parseFloat(formData.valor) / formData.numeroParcelas) : 'R$ 0,00'}
+                        Valor por parcela: {formData.valor ? formatCurrency(parseCurrencyInput(formData.valor) / formData.numeroParcelas) : 'R$ 0,00'}
                       </p>
                     </div>
                   )}
@@ -642,7 +654,7 @@ export function Lancamentos() {
                   type="submit"
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  Salvar
+                  {editingLancamento ? 'Salvar' : 'Criar'}
                 </button>
               </div>
             </form>
@@ -723,7 +735,6 @@ export function Lancamentos() {
                       </div>
                       
                       <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 transition-opacity">
-                        {/* Botões de status */}
                         {lancamento.status !== 'CONFIRMADO' && (
                           <button 
                             onClick={() => handleStatusChange(lancamento.id, 'CONFIRMADO')}
@@ -752,12 +763,17 @@ export function Lancamentos() {
                           </button>
                         )}
                         
-                        <button className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
+                        <button 
+                          onClick={() => handleEdit(lancamento)}
+                          className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                          title="Editar"
+                        >
                           <Edit3 className="w-4 h-4" />
                         </button>
                         <button 
                           onClick={() => handleDelete(lancamento.id)}
                           className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                          title="Excluir"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

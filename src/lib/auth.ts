@@ -7,6 +7,8 @@ export interface AuthUser extends User {
     avatar_url: string | null;
     moeda: string;
     tema: string;
+    notificacoes_email: boolean;
+    notificacoes_push: boolean;
   };
 }
 
@@ -70,7 +72,7 @@ export class AuthService {
       try {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('nome, avatar_url, moeda, tema')
+          .select('nome, avatar_url, moeda, tema, notificacoes_email, notificacoes_push')
           .eq('id', user.id)
           .single();
 
@@ -99,12 +101,41 @@ export class AuthService {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuário não autenticado');
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
-      .update(updates)
-      .eq('id', user.id);
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id)
+      .select()
+      .single();
 
     if (error) throw error;
+    
+    // Aplicar tema imediatamente se foi alterado
+    if (updates.tema) {
+      this.applyTheme(updates.tema);
+    }
+    
+    return data;
+  }
+
+  static applyTheme(theme: string) {
+    const root = document.documentElement;
+    
+    // Remove classes de tema existentes
+    root.classList.remove('light', 'dark');
+    
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else if (theme === 'light') {
+      root.classList.add('light');
+    } else if (theme === 'auto') {
+      // Detecta preferência do sistema
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      root.classList.add(prefersDark ? 'dark' : 'light');
+    }
   }
 
   static async resetPassword(email: string) {
@@ -118,20 +149,22 @@ export class AuthService {
   static onAuthStateChange(callback: (user: AuthUser | null) => void) {
     return supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        // CORREÇÃO: Usando .then() para uma abordagem mais segura com o ciclo de vida do React.
-        // A lógica é a mesma: buscar o perfil para garantir que o nome do usuário não suma.
+        // Buscar o perfil para garantir que o tema seja aplicado
         supabase
           .from('profiles')
-          .select('nome, avatar_url, moeda, tema')
+          .select('nome, avatar_url, moeda, tema, notificacoes_email, notificacoes_push')
           .eq('id', session.user.id)
           .single()
           .then(({ data: profile, error }) => {
             if (error) {
               console.error('Error fetching profile on auth state change:', error);
-              // Em caso de erro, retorna o usuário básico para não quebrar a sessão
               callback(session.user as AuthUser);
             } else {
-              // Monta o objeto completo do usuário com os dados do perfil
+              // Aplicar tema se disponível
+              if (profile?.tema) {
+                this.applyTheme(profile.tema);
+              }
+              
               const fullUser: AuthUser = {
                 ...session.user,
                 profile: profile || undefined,
@@ -140,7 +173,6 @@ export class AuthService {
             }
           });
       } else {
-        // Se não houver sessão, envia null para o callback
         callback(null);
       }
     });
