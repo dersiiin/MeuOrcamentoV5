@@ -9,6 +9,10 @@ import { MetasFinanceiras } from './components/Metas/MetasFinanceiras';
 import { Transferencias } from './components/Transferencias/Transferencias';
 import { Relatorios } from './components/Relatorios/Relatorios';
 import { Orcamentos } from './components/Orcamentos/Orcamentos';
+import { ConciliacaoBancaria } from './components/ConciliacaoBancaria/ConciliacaoBancaria';
+import { GestaoDividas } from './components/GestaoDividas/GestaoDividas';
+import { RelatoriosSankey } from './components/RelatoriosSankey/RelatoriosSankey';
+import { OCRRecibos } from './components/OCRRecibos/OCRRecibos';
 import { Configuracoes } from './components/Configuracoes';
 import { AuthService, type AuthUser } from './lib/auth';
 
@@ -73,12 +77,20 @@ function App() {
         return <Categorias />;
       case 'metas':
         return <MetasFinanceiras />;
+      case 'orcamentos':
+        return <Orcamentos />;
       case 'transferencias':
         return <Transferencias />;
       case 'relatorios':
         return <Relatorios />;
-      case 'orcamentos':
-        return <Orcamentos />;
+      case 'conciliacao':
+        return <ConciliacaoBancaria />;
+      case 'dividas':
+        return <GestaoDividas />;
+      case 'sankey':
+        return <RelatoriosSankey />;
+      case 'ocr':
+        return <OCRRecibos />;
       case 'configuracoes':
         return <Configuracoes />;
       default:

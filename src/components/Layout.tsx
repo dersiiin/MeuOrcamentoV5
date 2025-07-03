@@ -15,11 +15,16 @@ import {
   BarChart3,
   ArrowLeftRight,
   ChevronDown,
-  Calculator
+  Calculator,
+  FileText,
+  TrendingDown,
+  Scan,
+  Camera
 } from 'lucide-react';
 import { AuthService, type AuthUser } from '../lib/auth';
 import { DatabaseService } from '../lib/database';
 import { ChatBot } from './ChatBot/ChatBot';
+import { ChatBotExecutivo } from './ChatBot/ChatBotExecutivo';
 import { NotificationPanel } from './Notifications/NotificationPanel';
 import { AnomaliaDetector } from './AnomaliaDetector/AnomaliaDetector';
 
@@ -41,11 +46,19 @@ const menuItems = [
   { id: 'relatorios', label: 'Relatórios', icon: BarChart3 },
 ];
 
+const advancedMenuItems = [
+  { id: 'conciliacao', label: 'Conciliação', icon: FileText },
+  { id: 'dividas', label: 'Dívidas', icon: TrendingDown },
+  { id: 'sankey', label: 'Fluxo Sankey', icon: BarChart3 },
+  { id: 'ocr', label: 'OCR Recibos', icon: Camera },
+];
+
 export function Layout({ children, currentPage, onPageChange, user }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showAnomalias, setShowAnomalias] = useState(false);
+  const [showAdvancedMenu, setShowAdvancedMenu] = useState(false);
   const [notificacoesPendentes, setNotificacoesPendentes] = useState<any[]>([]);
 
   useEffect(() => {
@@ -79,6 +92,7 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
     onPageChange(pageId);
     setMobileMenuOpen(false);
     setUserMenuOpen(false);
+    setShowAdvancedMenu(false);
   };
 
   useEffect(() => {
@@ -87,6 +101,7 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
       if (!target.closest('[data-dropdown]')) {
         setNotificationsOpen(false);
         setUserMenuOpen(false);
+        setShowAdvancedMenu(false);
       }
     };
 
@@ -107,14 +122,14 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
                 </div>
                 <div className="hidden sm:block">
                   <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                    FinanceApp
+                    FinanceApp Pro
                   </h1>
-                  <p className="text-xs text-gray-500 leading-tight">Gestão Inteligente</p>
+                  <p className="text-xs text-gray-500 leading-tight">Gestão Avançada</p>
                 </div>
               </div>
             </div>
 
-            <nav className="hidden lg:flex items-center justify-center flex-1 max-w-4xl mx-8">
+            <nav className="hidden lg:flex items-center justify-center flex-1 max-w-6xl mx-8">
               <div className="flex items-center space-x-1 bg-gray-50 rounded-2xl p-1.5 shadow-inner">
                 {menuItems.map((item) => {
                   const Icon = item.icon;
@@ -126,7 +141,7 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
                       onClick={() => handlePageChange(item.id)}
                       aria-label={`Navegar para ${item.label}`}
                       className={`
-                        group flex items-center space-x-2.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 whitespace-nowrap relative overflow-hidden
+                        group flex items-center space-x-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 whitespace-nowrap relative overflow-hidden
                         ${isActive 
                           ? 'bg-white text-indigo-700 shadow-md ring-1 ring-indigo-100 transform scale-105' 
                           : 'text-gray-600 hover:text-indigo-600 hover:bg-white/70 hover:shadow-sm hover:scale-102'
@@ -144,6 +159,42 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
                     </button>
                   );
                 })}
+                
+                {/* Menu Avançado */}
+                <div className="relative" data-dropdown>
+                  <button
+                    onClick={() => setShowAdvancedMenu(!showAdvancedMenu)}
+                    className="group flex items-center space-x-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 text-gray-600 hover:text-indigo-600 hover:bg-white/70 hover:shadow-sm"
+                  >
+                    <Scan className="w-4 h-4 flex-shrink-0 transition-transform duration-300 group-hover:scale-110" />
+                    <span className="hidden xl:block font-medium">Avançado</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showAdvancedMenu ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {showAdvancedMenu && (
+                    <div className="absolute top-full mt-2 left-0 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50">
+                      {advancedMenuItems.map((item) => {
+                        const Icon = item.icon;
+                        const isActive = currentPage === item.id;
+                        
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => handlePageChange(item.id)}
+                            className={`w-full flex items-center space-x-3 px-4 py-3 text-sm transition-colors ${
+                              isActive 
+                                ? 'bg-indigo-50 text-indigo-700 border-r-2 border-indigo-500' 
+                                : 'text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
+                            }`}
+                          >
+                            <Icon className="w-4 h-4" />
+                            <span>{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </nav>
 
@@ -269,7 +320,7 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
               onClick={() => setMobileMenuOpen(false)}
             />
             
-            <div className="lg:hidden fixed top-0 right-0 h-full w-80 max-w-sm bg-white shadow-2xl z-50 transform transition-transform duration-300 animate-in slide-in-from-right">
+            <div className="lg:hidden fixed top-0 right-0 h-full w-80 max-w-sm bg-white shadow-2xl z-50 transform transition-transform duration-300 animate-in slide-in-from-right overflow-y-auto">
               <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
@@ -278,9 +329,9 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
                     </div>
                     <div>
                       <h2 className="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                        FinanceApp
+                        FinanceApp Pro
                       </h2>
-                      <p className="text-xs text-gray-500">Gestão Inteligente</p>
+                      <p className="text-xs text-gray-500">Gestão Avançada</p>
                     </div>
                   </div>
                   <button
@@ -292,33 +343,68 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
                 </div>
               </div>
               
-              <div className="p-4 space-y-2 overflow-y-auto">
-                {menuItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = currentPage === item.id;
-                  
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => handlePageChange(item.id)}
-                      className={`
-                        w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group
-                        ${isActive 
-                          ? 'bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 border border-indigo-200 shadow-sm' 
-                          : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
-                        }
-                      `}
-                    >
-                      <Icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-200 ${
-                        isActive ? 'scale-110' : 'group-hover:scale-110'
-                      }`} />
-                      <span>{item.label}</span>
-                      {isActive && (
-                        <div className="ml-auto w-2 h-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" />
-                      )}
-                    </button>
-                  );
-                })}
+              <div className="p-4 space-y-2">
+                {/* Menu Principal */}
+                <div className="mb-4">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-2">Principal</h3>
+                  {menuItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = currentPage === item.id;
+                    
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => handlePageChange(item.id)}
+                        className={`
+                          w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group
+                          ${isActive 
+                            ? 'bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 border border-indigo-200 shadow-sm' 
+                            : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
+                          }
+                        `}
+                      >
+                        <Icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-200 ${
+                          isActive ? 'scale-110' : 'group-hover:scale-110'
+                        }`} />
+                        <span>{item.label}</span>
+                        {isActive && (
+                          <div className="ml-auto w-2 h-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Menu Avançado */}
+                <div className="mb-4">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-2">Funcionalidades Avançadas</h3>
+                  {advancedMenuItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = currentPage === item.id;
+                    
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => handlePageChange(item.id)}
+                        className={`
+                          w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group
+                          ${isActive 
+                            ? 'bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 border border-indigo-200 shadow-sm' 
+                            : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
+                          }
+                        `}
+                      >
+                        <Icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-200 ${
+                          isActive ? 'scale-110' : 'group-hover:scale-110'
+                        }`} />
+                        <span>{item.label}</span>
+                        {isActive && (
+                          <div className="ml-auto w-2 h-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
                 
                 <div className="pt-4 mt-4 border-t border-gray-200 space-y-2">
                   <button
@@ -364,6 +450,7 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
       </main>
 
       <ChatBot />
+      <ChatBotExecutivo />
     </div>
   );
 }
