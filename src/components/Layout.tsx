@@ -14,12 +14,14 @@ import {
   X,
   BarChart3,
   ArrowLeftRight,
-  ChevronDown
+  ChevronDown,
+  Calculator
 } from 'lucide-react';
 import { AuthService, type AuthUser } from '../lib/auth';
 import { DatabaseService } from '../lib/database';
 import { ChatBot } from './ChatBot/ChatBot';
 import { NotificationPanel } from './Notifications/NotificationPanel';
+import { AnomaliaDetector } from './AnomaliaDetector/AnomaliaDetector';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -34,6 +36,7 @@ const menuItems = [
   { id: 'contas', label: 'Contas', icon: CreditCard },
   { id: 'categorias', label: 'Categorias', icon: Tags },
   { id: 'metas', label: 'Metas', icon: Target },
+  { id: 'orcamentos', label: 'Orçamentos', icon: Calculator },
   { id: 'transferencias', label: 'Transferências', icon: ArrowLeftRight },
   { id: 'relatorios', label: 'Relatórios', icon: BarChart3 },
 ];
@@ -42,6 +45,7 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [showAnomalias, setShowAnomalias] = useState(false);
   const [notificacoesPendentes, setNotificacoesPendentes] = useState<any[]>([]);
 
   useEffect(() => {
@@ -178,7 +182,6 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
                     <p className="text-sm font-semibold text-gray-900 leading-tight">
                       {user.profile?.nome || user.email || 'Usuário'}
                     </p>
-                    {/* Modificado: Só mostra o e-mail se o nome também estiver visível */}
                     {user.profile?.nome && (
                       <p className="text-xs text-gray-500 leading-tight truncate max-w-32">
                         {user.email}
@@ -187,7 +190,15 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
                   </div>
                   
                   <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-all duration-200">
-                    <User className="w-5 h-5 text-white" />
+                    {user.profile?.avatar_url ? (
+                      <img 
+                        src={user.profile.avatar_url} 
+                        alt="Avatar" 
+                        className="w-full h-full rounded-xl object-cover"
+                      />
+                    ) : (
+                      <User className="w-5 h-5 text-white" />
+                    )}
                   </div>
                   
                   <ChevronDown className={`w-4 h-4 text-gray-400 hidden sm:block transition-transform duration-200 ${
@@ -200,13 +211,20 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
                     <div className="px-4 py-3 border-b border-gray-100">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                          <User className="w-5 h-5 text-white" />
+                          {user.profile?.avatar_url ? (
+                            <img 
+                              src={user.profile.avatar_url} 
+                              alt="Avatar" 
+                              className="w-full h-full rounded-xl object-cover"
+                            />
+                          ) : (
+                            <User className="w-5 h-5 text-white" />
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-900 truncate">
                             {user.profile?.nome || user.email || 'Usuário'}
                           </p>
-                           {/* Modificado: Só mostra o e-mail se o nome também estiver visível */}
                           {user.profile?.nome && (
                             <p className="text-xs text-gray-500 truncate">{user.email}</p>
                           )}
@@ -326,7 +344,23 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
+        <div className="space-y-8">
+          {/* Detector de Anomalias - Mostrar apenas no dashboard */}
+          {currentPage === 'dashboard' && (
+            <div className="mb-6">
+              <button
+                onClick={() => setShowAnomalias(!showAnomalias)}
+                className="mb-4 flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
+              >
+                <span>{showAnomalias ? 'Ocultar' : 'Mostrar'} Detecção de Anomalias</span>
+              </button>
+              
+              {showAnomalias && <AnomaliaDetector />}
+            </div>
+          )}
+          
+          {children}
+        </div>
       </main>
 
       <ChatBot />
