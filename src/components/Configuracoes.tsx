@@ -1,8 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Download, Upload, Trash2, Shield, Database, AlertTriangle, CheckCircle, User, Bell, Palette, Globe } from 'lucide-react';
+import { Download, Upload, Trash2, Shield, Database, AlertTriangle, CheckCircle, User, Bell, Palette, Globe, Camera, Save, X } from 'lucide-react';
 import { AuthService } from '../lib/auth';
 import { DatabaseService } from '../lib/database';
 import { exportToJson, importFromJson } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 
 export function Configuracoes() {
   const [profile, setProfile] = useState<any>(null);
@@ -11,6 +12,7 @@ export function Configuracoes() {
   const [lancamentos, setLancamentos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [importMessage, setImportMessage] = useState('');
   const [profileForm, setProfileForm] = useState({
@@ -22,6 +24,7 @@ export function Configuracoes() {
   });
   const [profileLoading, setProfileLoading] = useState(false);
   const [clearDataLoading, setClearDataLoading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -81,6 +84,103 @@ export function Configuracoes() {
     } catch (error) {
       console.error('Erro ao atualizar perfil:', error);
       alert('Erro ao atualizar perfil');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validar tipo de arquivo
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor, selecione apenas arquivos de imagem');
+      return;
+    }
+
+    // Validar tamanho (máximo 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      alert('A imagem deve ter no máximo 2MB');
+      return;
+    }
+
+    setUploadingAvatar(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+      // Upload da imagem
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Erro no upload:', uploadError);
+        throw new Error(`Erro no upload: ${uploadError.message}`);
+      }
+
+      // Obter URL pública
+      const { data } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      if (!data?.publicUrl) {
+        throw new Error('Não foi possível obter a URL da imagem');
+      }
+
+      // Atualizar perfil com nova URL
+      await AuthService.updateProfile({
+        avatar_url: data.publicUrl
+      });
+
+      setProfile({ ...profile, avatar_url: data.publicUrl });
+      alert('Foto de perfil atualizada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao fazer upload da imagem:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      alert(`Erro ao fazer upload da imagem: ${errorMessage}`);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!confirm('Tem certeza que deseja remover sua foto de perfil?')) return;
+
+    setProfileLoading(true);
+
+    try {
+      // Remover arquivo do storage se existir
+      if (profile?.avatar_url) {
+        try {
+          const fileName = profile.avatar_url.split('/').pop();
+          if (fileName) {
+            await supabase.storage
+              .from('avatars')
+              .remove([`${profile.id}/${fileName}`]);
+          }
+        } catch (error) {
+          console.warn('Erro ao remover arquivo do storage:', error);
+        }
+      }
+
+      await AuthService.updateProfile({
+        avatar_url: null
+      });
+
+      setProfile({ ...profile, avatar_url: null });
+      alert('Foto de perfil removida com sucesso!');
+    } catch (error) {
+      console.error('Erro ao remover foto:', error);
+      alert('Erro ao remover foto');
     } finally {
       setProfileLoading(false);
     }
@@ -236,10 +336,10 @@ Tem certeza que deseja continuar?
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 lg:space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Configurações</h1>
+      <div className="text-center lg:text-left">
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Configurações</h1>
         <p className="text-gray-600 mt-2">Gerencie seu perfil, dados e configurações da aplicação</p>
       </div>
 
@@ -268,14 +368,75 @@ Tem certeza que deseja continuar?
       )}
 
       {/* Configurações do Perfil */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6">
         <div className="flex items-center space-x-2 mb-6">
           <User className="w-5 h-5 text-blue-600" />
-          <h2 className="text-xl font-semibold text-gray-900">Perfil do Usuário</h2>
+          <h2 className="text-lg lg:text-xl font-semibold text-gray-900">Perfil do Usuário</h2>
+        </div>
+        
+        {/* Foto de Perfil */}
+        <div className="mb-6">
+          <h3 className="text-base lg:text-lg font-medium text-gray-900 mb-4">Foto de Perfil</h3>
+          
+          <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
+            <div className="relative">
+              <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+                {profile?.avatar_url ? (
+                  <img 
+                    src={profile.avatar_url} 
+                    alt="Avatar" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User className="w-8 lg:w-12 h-8 lg:h-12 text-gray-400" />
+                )}
+              </div>
+              
+              {uploadingAvatar && (
+                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                </div>
+              )}
+            </div>
+            
+            <div className="space-y-2 text-center sm:text-left">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
+              
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm lg:text-base"
+              >
+                <Camera className="w-4 h-4" />
+                <span>{profile?.avatar_url ? 'Alterar Foto' : 'Adicionar Foto'}</span>
+              </button>
+              
+              {profile?.avatar_url && (
+                <button
+                  onClick={handleRemoveAvatar}
+                  disabled={profileLoading}
+                  className="flex items-center space-x-2 px-4 py-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50 text-sm lg:text-base"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Remover Foto</span>
+                </button>
+              )}
+              
+              <p className="text-xs text-gray-500">
+                JPG, PNG ou GIF. Máximo 2MB.
+              </p>
+            </div>
+          </div>
         </div>
         
         <form onSubmit={handleProfileUpdate} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Nome Completo
@@ -284,7 +445,7 @@ Tem certeza que deseja continuar?
                 type="text"
                 value={profileForm.nome}
                 onChange={(e) => setProfileForm(prev => ({ ...prev, nome: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm lg:text-base"
                 placeholder="Seu nome completo"
               />
             </div>
@@ -296,7 +457,7 @@ Tem certeza que deseja continuar?
               <select
                 value={profileForm.moeda}
                 onChange={(e) => setProfileForm(prev => ({ ...prev, moeda: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm lg:text-base"
               >
                 <option value="BRL">Real Brasileiro (R$)</option>
                 <option value="USD">Dólar Americano ($)</option>
@@ -304,7 +465,7 @@ Tem certeza que deseja continuar?
               </select>
             </div>
 
-            <div>
+            <div className="lg:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <Palette className="w-4 h-4 inline mr-1" />
                 Tema da Interface
@@ -312,7 +473,7 @@ Tem certeza que deseja continuar?
               <select
                 value={profileForm.tema}
                 onChange={(e) => setProfileForm(prev => ({ ...prev, tema: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm lg:text-base"
               >
                 <option value="light">🌞 Claro</option>
                 <option value="dark">🌙 Escuro</option>
@@ -327,7 +488,7 @@ Tem certeza que deseja continuar?
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900 flex items-center space-x-2">
+            <h3 className="text-base lg:text-lg font-medium text-gray-900 flex items-center space-x-2">
               <Bell className="w-5 h-5" />
               <span>Notificações</span>
             </h3>
@@ -365,12 +526,12 @@ Tem certeza que deseja continuar?
             <button
               type="submit"
               disabled={profileLoading}
-              className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm lg:text-base"
             >
               {profileLoading ? (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
               ) : (
-                <User className="w-4 h-4" />
+                <Save className="w-4 h-4" />
               )}
               <span>{profileLoading ? 'Salvando...' : 'Salvar Perfil'}</span>
             </button>
@@ -379,10 +540,10 @@ Tem certeza que deseja continuar?
       </div>
 
       {/* Informações do Sistema */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6">
         <div className="flex items-center space-x-2 mb-4">
           <Shield className="w-5 h-5 text-green-600" />
-          <h2 className="text-xl font-semibold text-gray-900">Privacidade & Segurança</h2>
+          <h2 className="text-lg lg:text-xl font-semibold text-gray-900">Privacidade & Segurança</h2>
         </div>
         
         <div className="space-y-3 text-sm text-gray-600">
@@ -406,28 +567,28 @@ Tem certeza que deseja continuar?
       </div>
 
       {/* Estatísticas dos Dados */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6">
         <div className="flex items-center space-x-2 mb-4">
           <Database className="w-5 h-5 text-blue-600" />
-          <h2 className="text-xl font-semibold text-gray-900">Seus Dados</h2>
+          <h2 className="text-lg lg:text-xl font-semibold text-gray-900">Seus Dados</h2>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">{categorias.length}</div>
-            <div className="text-sm text-gray-600">Categorias</div>
+            <div className="text-xl lg:text-2xl font-bold text-blue-600">{categorias.length}</div>
+            <div className="text-xs lg:text-sm text-gray-600">Categorias</div>
           </div>
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <div className="text-2xl font-bold text-green-600">{contas.length}</div>
-            <div className="text-sm text-gray-600">Contas</div>
+            <div className="text-xl lg:text-2xl font-bold text-green-600">{contas.length}</div>
+            <div className="text-xs lg:text-sm text-gray-600">Contas</div>
           </div>
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <div className="text-2xl font-bold text-purple-600">{totalTransacoes}</div>
-            <div className="text-sm text-gray-600">Lançamentos</div>
+            <div className="text-xl lg:text-2xl font-bold text-purple-600">{totalTransacoes}</div>
+            <div className="text-xs lg:text-sm text-gray-600">Lançamentos</div>
           </div>
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <div className="text-2xl font-bold text-orange-600">{comprasParceladasCount}</div>
-            <div className="text-sm text-gray-600">Compras Parceladas</div>
+            <div className="text-xl lg:text-2xl font-bold text-orange-600">{comprasParceladasCount}</div>
+            <div className="text-xs lg:text-sm text-gray-600">Compras Parceladas</div>
             {parcelasCount > 0 && (
               <div className="text-xs text-gray-500 mt-1">{parcelasCount} parcelas</div>
             )}
@@ -436,13 +597,13 @@ Tem certeza que deseja continuar?
       </div>
 
       {/* Backup e Restore */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Backup & Restauração</h2>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6">
+        <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-4">Backup & Restauração</h2>
         
         <div className="space-y-4">
           {/* Exportar Dados */}
           <div className="border border-gray-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
               <div>
                 <h3 className="font-medium text-gray-900">Exportar Dados</h3>
                 <p className="text-sm text-gray-600 mt-1">
@@ -454,7 +615,7 @@ Tem certeza que deseja continuar?
               </div>
               <button
                 onClick={handleExport}
-                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm lg:text-base"
               >
                 <Download className="w-4 h-4" />
                 <span>Exportar</span>
@@ -464,7 +625,7 @@ Tem certeza que deseja continuar?
 
           {/* Importar Dados */}
           <div className="border border-gray-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
               <div>
                 <h3 className="font-medium text-gray-900">Importar Dados</h3>
                 <p className="text-sm text-gray-600 mt-1">
@@ -486,7 +647,7 @@ Tem certeza que deseja continuar?
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={importStatus === 'loading'}
-                  className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm lg:text-base"
                 >
                   <Upload className="w-4 h-4" />
                   <span>{importStatus === 'loading' ? 'Importando...' : 'Importar'}</span>
@@ -497,7 +658,7 @@ Tem certeza que deseja continuar?
 
           {/* Limpar Dados */}
           <div className="border border-red-200 rounded-lg p-4 bg-red-50">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
               <div>
                 <h3 className="font-medium text-red-900">Limpar Todos os Dados</h3>
                 <p className="text-sm text-red-700 mt-1">
@@ -510,7 +671,7 @@ Tem certeza que deseja continuar?
               <button
                 onClick={handleClearData}
                 disabled={clearDataLoading}
-                className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm lg:text-base"
               >
                 {clearDataLoading ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -525,8 +686,8 @@ Tem certeza que deseja continuar?
       </div>
 
       {/* Dicas de Uso */}
-      <div className="bg-blue-50 rounded-xl border border-blue-200 p-6">
-        <h2 className="text-xl font-semibold text-blue-900 mb-4">💡 Dicas de Uso</h2>
+      <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 lg:p-6">
+        <h2 className="text-lg lg:text-xl font-semibold text-blue-900 mb-4">💡 Dicas de Uso</h2>
         
         <div className="space-y-2 text-sm text-blue-800">
           <div className="flex items-start space-x-2">
@@ -553,10 +714,10 @@ Tem certeza que deseja continuar?
       </div>
 
       {/* Informações Técnicas */}
-      <div className="bg-gray-50 rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">ℹ️ Informações Técnicas</h2>
+      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 lg:p-6">
+        <h2 className="text-base lg:text-lg font-semibold text-gray-900 mb-4">ℹ️ Informações Técnicas</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-sm text-gray-600">
           <div>
             <strong>Banco de Dados:</strong> Supabase (PostgreSQL)
           </div>

@@ -18,12 +18,25 @@ const config: AzureOpenAIConfig = {
 export class AzureOpenAIService {
   private static systemPrompt = `
 Você é um assistente financeiro inteligente especializado em gestão de finanças pessoais.
-Seu objetivo é ajudar usuários a entender e gerenciar suas finanças.
-Responda de forma clara, objetiva e educativa, baseando-se nos dados fornecidos no contexto.
-Mantenha um tom amigável e profissional.
-Sempre que usar dados para responder, mencione isso (ex: "Consultando seus dados...", "De acordo com seus lançamentos...").
-Se não houver dados no contexto para responder, informe ao usuário de forma clara.
-Limite suas respostas a tópicos relacionados a finanças pessoais.
+Seu objetivo é ajudar usuários a entender e gerenciar suas finanças de forma inteligente e educativa.
+
+INSTRUÇÕES IMPORTANTES:
+1. Responda de forma clara, objetiva e educativa
+2. Use um tom amigável e profissional
+3. Sempre que usar dados para responder, mencione isso (ex: "Consultando seus dados...", "De acordo com seus lançamentos...")
+4. Se não houver dados no contexto para responder, informe ao usuário de forma clara
+5. Limite suas respostas a tópicos relacionados a finanças pessoais
+6. Forneça insights valiosos e sugestões práticas
+7. Use emojis moderadamente para tornar a conversa mais amigável
+8. Seja proativo em sugerir melhorias financeiras quando apropriado
+
+CAPACIDADES ESPECIAIS:
+- Análise de padrões de gastos
+- Sugestões de economia
+- Alertas sobre gastos anômalos
+- Previsões financeiras
+- Educação financeira personalizada
+- Comparações e benchmarks
 `;
 
   /**
@@ -45,8 +58,8 @@ Limite suas respostas a tópicos relacionados a finanças pessoais.
             { role: 'system', content: this.systemPrompt },
             { role: 'user', content: userPrompt }
           ],
-          max_tokens: 800,
-          temperature: 0.2,
+          max_tokens: 1000,
+          temperature: 0.3,
           top_p: 0.95,
           frequency_penalty: 0,
           presence_penalty: 0
@@ -78,7 +91,7 @@ Limite suas respostas a tópicos relacionados a finanças pessoais.
    */
   static async getChatResponse(userMessage: string): Promise<string> {
     const lowerCaseMessage = userMessage.toLowerCase();
-    let contextPrompt = 'O usuário não pediu dados financeiros específicos.';
+    let contextPrompt = 'O usuário fez uma pergunta geral sobre finanças.';
     let currency = 'BRL'; // Moeda Padrão
 
     try {
@@ -94,59 +107,129 @@ Limite suas respostas a tópicos relacionados a finanças pessoais.
         }
       }
 
-      const expenseKeywords = ['gasto', 'gastei', 'gastos', 'despesa', 'despesas'];
-      const balanceKeywords = ['saldo', 'saldos', 'conta', 'contas'];
-      const summaryKeywords = ['resumo', 'visão geral', 'geral', 'total'];
-      const goalKeywords = ['meta', 'metas', 'objetivo', 'objetivos'];
+      // Palavras-chave para diferentes tipos de análise
+      const expenseKeywords = ['gasto', 'gastei', 'gastos', 'despesa', 'despesas', 'gastando', 'gastar'];
+      const balanceKeywords = ['saldo', 'saldos', 'conta', 'contas', 'dinheiro', 'valor'];
+      const summaryKeywords = ['resumo', 'visão geral', 'geral', 'total', 'situação', 'como está', 'como estão'];
+      const goalKeywords = ['meta', 'metas', 'objetivo', 'objetivos', 'economizar', 'poupar'];
+      const categoryKeywords = ['categoria', 'categorias', 'onde', 'gastando mais', 'maior gasto'];
+      const incomeKeywords = ['receita', 'receitas', 'ganho', 'renda', 'salário'];
+      const budgetKeywords = ['orçamento', 'orçamentos', 'planejamento', 'planejar'];
+      const trendKeywords = ['tendência', 'evolução', 'crescimento', 'comparar', 'mês passado'];
       
+      // Buscar dados baseado no contexto da mensagem
       if (expenseKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
         const data = await DatabaseService.getGastosPorCategoria(
           new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
           new Date().toISOString()
         );
-        contextPrompt = `Dados de gastos do usuário para este mês (agrupados por categoria):\n${JSON.stringify(data, null, 2)}`;
-      } else if (balanceKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
+        contextPrompt = `📊 Dados de gastos do usuário para este mês (agrupados por categoria):\n${JSON.stringify(data, null, 2)}`;
+      } 
+      else if (balanceKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
         const contas = await DatabaseService.getContas();
-        contextPrompt = `Dados de saldo das contas do usuário:\n${JSON.stringify(contas.map(c => ({ nome: c.nome, saldo_atual: c.saldo_atual })), null, 2)}`;
-      } else if (summaryKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
-        const resumo = await DatabaseService.getResumoFinanceiro(
+        contextPrompt = `💰 Dados de saldo das contas do usuário:\n${JSON.stringify(contas.map(c => ({ 
+          nome: c.nome, 
+          tipo: c.tipo,
+          saldo_atual: c.saldo_atual,
+          limite_credito: c.limite_credito 
+        })), null, 2)}`;
+      } 
+      else if (summaryKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
+        const [resumo, gastosPorCategoria, contas] = await Promise.all([
+          DatabaseService.getResumoFinanceiro(
             new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
             new Date().toISOString()
-        );
-        contextPrompt = `Dados de resumo financeiro do usuário para o mês atual:\n${JSON.stringify(resumo, null, 2)}`;
-      } else if (goalKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
+          ),
+          DatabaseService.getGastosPorCategoria(
+            new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
+            new Date().toISOString()
+          ),
+          DatabaseService.getContas()
+        ]);
+        contextPrompt = `📈 Resumo financeiro completo do usuário para o mês atual:
+        
+RESUMO GERAL: ${JSON.stringify(resumo, null, 2)}
+
+GASTOS POR CATEGORIA: ${JSON.stringify(gastosPorCategoria, null, 2)}
+
+CONTAS: ${JSON.stringify(contas.map(c => ({ 
+          nome: c.nome, 
+          tipo: c.tipo,
+          saldo_atual: c.saldo_atual 
+        })), null, 2)}`;
+      } 
+      else if (goalKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
         const metas = await DatabaseService.getMetas();
-        contextPrompt = `Dados sobre as metas financeiras do usuário:\n${JSON.stringify(metas.map(m => ({ nome: m.nome, valor_meta: m.valor_meta, valor_atual: m.valor_atual, status: m.status })), null, 2)}`;
+        contextPrompt = `🎯 Dados sobre as metas financeiras do usuário:\n${JSON.stringify(metas.map(m => ({ 
+          nome: m.nome, 
+          tipo: m.tipo,
+          valor_meta: m.valor_meta, 
+          valor_atual: m.valor_atual, 
+          status: m.status,
+          data_inicio: m.data_inicio,
+          data_fim: m.data_fim
+        })), null, 2)}`;
+      }
+      else if (categoryKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
+        const gastosPorCategoria = await DatabaseService.getGastosPorCategoria(
+          new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
+          new Date().toISOString()
+        );
+        contextPrompt = `📊 Análise detalhada de gastos por categoria:\n${JSON.stringify(gastosPorCategoria, null, 2)}`;
+      }
+      else if (incomeKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
+        const lancamentos = await DatabaseService.getLancamentos({
+          dataInicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
+          dataFim: new Date().toISOString(),
+          tipo: 'RECEITA'
+        });
+        contextPrompt = `💵 Dados de receitas do usuário para este mês:\n${JSON.stringify(lancamentos.map(l => ({
+          descricao: l.descricao,
+          valor: l.valor,
+          data: l.data,
+          categoria: l.categoria?.nome
+        })), null, 2)}`;
+      }
+      else if (budgetKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
+        const orcamentos = await DatabaseService.getOrcamentos(
+          new Date().getFullYear(),
+          new Date().getMonth() + 1
+        );
+        contextPrompt = `📋 Dados de orçamentos do usuário para este mês:\n${JSON.stringify(orcamentos, null, 2)}`;
+      }
+      else if (trendKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
+        const evolucao = await DatabaseService.getEvolucaoMensal(6);
+        contextPrompt = `📈 Evolução financeira dos últimos 6 meses:\n${JSON.stringify(evolucao, null, 2)}`;
       }
     } catch (error) {
       console.error('Erro ao buscar contexto para IA:', error);
-      contextPrompt = 'Ocorreu um erro ao tentar buscar os dados financeiros para responder a esta pergunta. Informe o usuário sobre o erro.';
+      contextPrompt = 'Ocorreu um erro ao tentar buscar os dados financeiros para responder a esta pergunta. Informe o usuário sobre o erro e sugira tentar novamente.';
     }
     
-    // Modificado: O prompt final agora contém instruções de estilo mais explícitas.
+    // Prompt final com instruções de formatação melhoradas
     const finalPrompt = `
-      **Instrução de Formatação e Estilo de Resposta:**
+      **CONTEXTO FINANCEIRO:**
       ---
-      A moeda do usuário é ${currency}.
-      1. **Formatação de Moeda:** Sempre que apresentar um valor monetário (receitas, despesas, saldos), formate-o usando "R$" (se a moeda for BRL) ANTES do número. Exemplo: "um total de R$ 50,00 em receitas".
-      2. **Clareza:** Evite frases ambíguas como "10 receitas". Em vez disso, diga "um total de R$ 10,00 de receitas" ou "suas receitas totalizaram R$ 10,00".
-      3. **Jamais use o termo genérico "unidades monetárias".**
-      ---
-
-      **Contexto Financeiro Fornecido:**
-      ---
+      Moeda do usuário: ${currency}
       ${contextPrompt}
       ---
       
-      Com base no contexto e nas instruções de formatação e estilo acima, responda à seguinte pergunta do usuário de forma clara, amigável e objetiva:
+      **INSTRUÇÕES DE RESPOSTA:**
+      1. **Formatação de Moeda:** Sempre use "R$" para valores em BRL, "$" para USD, "€" para EUR
+      2. **Clareza:** Seja específico com números e valores
+      3. **Insights:** Forneça análises úteis e sugestões práticas
+      4. **Educação:** Explique conceitos quando apropriado
+      5. **Ação:** Sugira próximos passos quando relevante
       
-      **Pergunta do Usuário:** "${userMessage}"
+      **PERGUNTA DO USUÁRIO:** "${userMessage}"
+      
+      Responda de forma completa, útil e educativa, usando os dados fornecidos quando disponíveis.
     `;
     
     return this._callOpenAI(finalPrompt);
   }
 
-  // As funções abaixo agora usam o helper _callOpenAI para consistência.
+  // Funções especializadas mantidas para compatibilidade
   static async categorizarDespesa(descricao: string, categorias: string[]): Promise<string> {
     const prompt = `
 Baseado na descrição "${descricao}", qual das seguintes categorias melhor se adequa?
@@ -158,12 +241,17 @@ Responda apenas com o nome da categoria mais apropriada.
 
   static async analisarGastos(dadosFinanceiros: any): Promise<string> {
     const prompt = `
-Analise os seguintes dados financeiros e forneça insights:
+Analise os seguintes dados financeiros e forneça insights valiosos:
 - Receitas totais: R$ ${dadosFinanceiros.receitas}
 - Despesas totais: R$ ${dadosFinanceiros.despesas}
 - Saldo: R$ ${dadosFinanceiros.saldo}
 - Principais categorias de gastos: ${dadosFinanceiros.categorias?.join(', ') || 'Não informado'}
-Forneça uma análise concisa com sugestões de melhoria.
+
+Forneça uma análise concisa com:
+1. Avaliação da situação atual
+2. Pontos de atenção
+3. Sugestões específicas de melhoria
+4. Próximos passos recomendados
 `;
     return this._callOpenAI(prompt);
   }
@@ -171,9 +259,32 @@ Forneça uma análise concisa com sugestões de melhoria.
   static async preverGastos(historicoGastos: number[]): Promise<string> {
     const media = historicoGastos.reduce((a, b) => a + b, 0) / historicoGastos.length;
     const prompt = `
-Baseado no histórico de gastos mensais: ${historicoGastos.map(g => `R$ ${g}`).join(', ')}
+Baseado no histórico de gastos mensais: ${historicoGastos.map(g => `R$ ${g.toFixed(2)}`).join(', ')}
 Média mensal: R$ ${media.toFixed(2)}
-Forneça uma previsão para o próximo mês e sugestões para otimização dos gastos.
+
+Forneça:
+1. Previsão para o próximo mês
+2. Tendência observada
+3. Sugestões para otimização dos gastos
+4. Alertas sobre padrões preocupantes (se houver)
+`;
+    return this._callOpenAI(prompt);
+  }
+
+  static async gerarInsightsPersonalizados(dadosCompletos: any): Promise<string> {
+    const prompt = `
+Analise os dados financeiros completos do usuário e gere insights personalizados:
+
+DADOS: ${JSON.stringify(dadosCompletos, null, 2)}
+
+Forneça insights sobre:
+1. Padrões de comportamento financeiro
+2. Oportunidades de economia
+3. Riscos identificados
+4. Recomendações personalizadas
+5. Metas sugeridas
+
+Seja específico e prático nas recomendações.
 `;
     return this._callOpenAI(prompt);
   }
