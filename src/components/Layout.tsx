@@ -300,9 +300,7 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
       )}
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
-        sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
-      }`}>
+      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
         {/* Top Header */}
         <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
           <div className="px-4 sm:px-6 lg:px-8">
@@ -317,11 +315,6 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
 
               {/* Page Title - Hidden on mobile */}
               <div className="hidden sm:block">
-                <h1 className="text-xl font-semibold text-gray-900 capitalize">
-                  {menuItems.find(item => item.id === currentPage)?.label || 
-                   advancedMenuItems.find(item => item.id === currentPage)?.label || 
-                   'Dashboard'}
-                </h1>
               </div>
 
               {/* Right side actions */}

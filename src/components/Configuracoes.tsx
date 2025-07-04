@@ -173,7 +173,7 @@ export function Configuracoes() {
       }
 
       await AuthService.updateProfile({
-        avatar_url: null
+        avatar_url: undefined
       });
 
       setProfile({ ...profile, avatar_url: null });
