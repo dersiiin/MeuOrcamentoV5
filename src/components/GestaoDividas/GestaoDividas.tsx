@@ -3,6 +3,7 @@ import { Plus, CreditCard, Calendar, TrendingDown, AlertTriangle, CheckCircle, E
 import { DatabaseService } from '../../lib/database';
 import { AuthService } from '../../lib/auth';
 import { formatCurrency, formatDate } from '../../lib/utils';
+import { CurrencyInput } from '../Common/CurrencyInput';
 
 interface Divida {
   id: string;
@@ -30,11 +31,11 @@ export function GestaoDividas() {
   const [formData, setFormData] = useState({
     nome: '',
     tipo: 'EMPRESTIMO' as 'EMPRESTIMO' | 'FINANCIAMENTO' | 'CARTAO_CREDITO' | 'OUTRO',
-    valor_total: '',
-    taxa_juros: '',
+    valor_total: 0,
+    taxa_juros: 0,
     data_inicio: new Date().toISOString().split('T')[0],
     data_vencimento: '',
-    parcelas_total: '',
+    parcelas_total: 1,
     observacoes: '',
   });
 
@@ -48,28 +49,39 @@ export function GestaoDividas() {
       // Usar a tabela de patrimônio para armazenar dívidas como valores negativos
       const patrimonioData = await DatabaseService.getPatrimonio();
       
-      // Filtrar apenas dívidas (valores negativos ou tipo específico)
+      // Filtrar apenas dívidas (valores negativos ou descrição contendo informações de dívida)
       const dividasData = patrimonioData
-        .filter(item => item.tipo === 'DIVIDA' || item.valor_atual < 0)
-        .map(item => ({
-          id: item.id,
-          nome: item.nome,
-          tipo: item.descricao?.includes('EMPRESTIMO') ? 'EMPRESTIMO' :
-                item.descricao?.includes('FINANCIAMENTO') ? 'FINANCIAMENTO' :
-                item.descricao?.includes('CARTAO') ? 'CARTAO_CREDITO' : 'OUTRO',
-          valor_total: Math.abs(item.valor_compra || item.valor_atual),
-          valor_pago: 0, // Calcular baseado nos lançamentos
-          valor_restante: Math.abs(item.valor_atual),
-          taxa_juros: 0, // Extrair da descrição se disponível
-          data_inicio: item.data_aquisicao || new Date().toISOString().split('T')[0],
-          data_vencimento: item.data_aquisicao || new Date().toISOString().split('T')[0],
-          parcela_valor: 0,
-          parcelas_total: 1,
-          parcelas_pagas: 0,
-          status: Math.abs(item.valor_atual) > 0 ? 'ATIVA' : 'QUITADA',
-          observacoes: item.descricao,
-          created_at: item.created_at || new Date().toISOString()
-        })) as Divida[];
+        .filter(item => item.valor_atual < 0 || (item.descricao && item.descricao.includes('DIVIDA:')))
+        .map(item => {
+          // Extrair informações da descrição
+          const descricao = item.descricao || '';
+          const tipoMatch = descricao.match(/DIVIDA:(\w+)/);
+          const taxaMatch = descricao.match(/Taxa:\s*([\d.]+)%/);
+          const parcelasMatch = descricao.match(/Parcelas:\s*(\d+)/);
+          const vencimentoMatch = descricao.match(/Vencimento:\s*([\d-]+)/);
+          
+          const valorTotal = Math.abs(item.valor_compra || item.valor_atual);
+          const parcelasTotal = parcelasMatch ? parseInt(parcelasMatch[1]) : 1;
+          const parcelaValor = valorTotal / parcelasTotal;
+          
+          return {
+            id: item.id,
+            nome: item.nome,
+            tipo: (tipoMatch ? tipoMatch[1] : 'OUTRO') as 'EMPRESTIMO' | 'FINANCIAMENTO' | 'CARTAO_CREDITO' | 'OUTRO',
+            valor_total: valorTotal,
+            valor_pago: valorTotal - Math.abs(item.valor_atual), // Calcular baseado na diferença
+            valor_restante: Math.abs(item.valor_atual),
+            taxa_juros: taxaMatch ? parseFloat(taxaMatch[1]) : 0,
+            data_inicio: item.data_aquisicao || new Date().toISOString().split('T')[0],
+            data_vencimento: vencimentoMatch ? vencimentoMatch[1] : item.data_aquisicao || new Date().toISOString().split('T')[0],
+            parcela_valor: parcelaValor,
+            parcelas_total: parcelasTotal,
+            parcelas_pagas: Math.floor((valorTotal - Math.abs(item.valor_atual)) / parcelaValor),
+            status: Math.abs(item.valor_atual) > 0 ? 'ATIVA' : 'QUITADA',
+            observacoes: descricao.replace(/DIVIDA:\w+\s*-\s*Taxa:\s*[\d.]+%\s*-\s*Parcelas:\s*\d+\s*-\s*Vencimento:\s*[\d-]+\s*-\s*/, '').trim(),
+            created_at: item.created_at || new Date().toISOString()
+          } as Divida;
+        });
 
       setDividas(dividasData);
     } catch (error) {
@@ -88,17 +100,17 @@ export function GestaoDividas() {
     
     try {
       setLoading(true);
-      const valorTotal = parseFloat(formData.valor_total);
-      const parcelasTotal = parseInt(formData.parcelas_total);
+      const valorTotal = formData.valor_total;
+      const parcelasTotal = formData.parcelas_total;
       const parcelaValor = valorTotal / parcelasTotal;
 
       const dividaData = {
         nome: formData.nome,
-        tipo: 'DIVIDA', // Usar tipo específico para dívidas
+        tipo: 'OUTRO', // Usar 'OUTRO' que é permitido pela constraint do banco
         valor_atual: -Math.abs(valorTotal), // Valor negativo para representar dívida
         valor_compra: valorTotal,
         data_aquisicao: formData.data_inicio,
-        descricao: `${formData.tipo} - Taxa: ${formData.taxa_juros}% - Parcelas: ${parcelasTotal} - Vencimento: ${formData.data_vencimento} - ${formData.observacoes || ''}`,
+        descricao: `DIVIDA:${formData.tipo} - Taxa: ${formData.taxa_juros}% - Parcelas: ${parcelasTotal} - Vencimento: ${formData.data_vencimento} - ${formData.observacoes || ''}`,
         ativo: true
       };
 
@@ -128,11 +140,11 @@ export function GestaoDividas() {
     setFormData({
       nome: divida.nome,
       tipo: divida.tipo,
-      valor_total: divida.valor_total.toString(),
-      taxa_juros: divida.taxa_juros.toString(),
+      valor_total: divida.valor_total,
+      taxa_juros: divida.taxa_juros,
       data_inicio: divida.data_inicio,
       data_vencimento: divida.data_vencimento,
-      parcelas_total: divida.parcelas_total.toString(),
+      parcelas_total: divida.parcelas_total,
       observacoes: divida.observacoes || '',
     });
     setShowForm(true);
@@ -162,11 +174,11 @@ export function GestaoDividas() {
     setFormData({
       nome: '',
       tipo: 'EMPRESTIMO',
-      valor_total: '',
-      taxa_juros: '',
+      valor_total: 0,
+      taxa_juros: 0,
       data_inicio: new Date().toISOString().split('T')[0],
       data_vencimento: '',
-      parcelas_total: '',
+      parcelas_total: 1,
       observacoes: '',
     });
     setShowForm(false);
@@ -307,13 +319,11 @@ export function GestaoDividas() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Valor Total *
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
+                  <CurrencyInput
                     value={formData.valor_total}
-                    onChange={(e) => setFormData(prev => ({ ...prev, valor_total: e.target.value }))}
+                    onChange={(value) => setFormData(prev => ({ ...prev, valor_total: value }))}
+                    placeholder="R$ 0,00"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="0,00"
                     required
                   />
                 </div>
@@ -326,7 +336,7 @@ export function GestaoDividas() {
                     type="number"
                     step="0.01"
                     value={formData.taxa_juros}
-                    onChange={(e) => setFormData(prev => ({ ...prev, taxa_juros: e.target.value }))}
+                    onChange={(e) => setFormData(prev => ({ ...prev, taxa_juros: parseFloat(e.target.value) || 0 }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="0,00"
                   />
@@ -368,9 +378,10 @@ export function GestaoDividas() {
                 <input
                   type="number"
                   value={formData.parcelas_total}
-                  onChange={(e) => setFormData(prev => ({ ...prev, parcelas_total: e.target.value }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, parcelas_total: parseInt(e.target.value) || 1 }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="12"
+                  min="1"
                   required
                 />
               </div>
@@ -412,8 +423,8 @@ export function GestaoDividas() {
       {/* Lista de Dívidas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {dividas.map((divida) => {
-          const progressoPagamento = (divida.valor_pago / divida.valor_total) * 100;
-          const progressoParcelas = (divida.parcelas_pagas / divida.parcelas_total) * 100;
+          const progressoPagamento = divida.valor_total > 0 ? (divida.valor_pago / divida.valor_total) * 100 : 0;
+          const progressoParcelas = divida.parcelas_total > 0 ? (divida.parcelas_pagas / divida.parcelas_total) * 100 : 0;
           
           return (
             <div key={divida.id} className={`bg-white rounded-xl shadow-sm border p-6 hover:shadow-md transition-all duration-200 group ${getStatusColor(divida.status)}`}>
@@ -478,7 +489,7 @@ export function GestaoDividas() {
                   </div>
                   <div>
                     <p className="text-gray-600">Taxa de Juros</p>
-                    <p className="font-semibold text-gray-900">{divida.taxa_juros}% a.a.</p>
+                    <p className="font-semibold text-gray-900">{divida.taxa_juros.toFixed(2)}% a.a.</p>
                   </div>
                 </div>
 
