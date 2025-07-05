@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, CreditCard, Calendar, TrendingDown, AlertTriangle, CheckCircle, Edit3, Trash2 } from 'lucide-react';
 import { DatabaseService } from '../../lib/database';
 import { AuthService } from '../../lib/auth';
-import { formatCurrency, formatDate } from '../../lib/utils';
+import { formatCurrency, formatDate, parseCurrencyInput } from '../../lib/utils';
 import { CurrencyInput } from '../Common/CurrencyInput';
 
 interface Divida {
@@ -100,7 +100,11 @@ export function GestaoDividas() {
     
     try {
       setLoading(true);
-      const valorTotal = formData.valor_total;
+      // Parse the currency input to get numeric value
+      const valorTotal = typeof formData.valor_total === 'string' 
+        ? parseCurrencyInput(formData.valor_total) 
+        : formData.valor_total;
+      
       const parcelasTotal = formData.parcelas_total;
       const parcelaValor = valorTotal / parcelasTotal;
 
