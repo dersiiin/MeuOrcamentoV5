@@ -20,6 +20,7 @@ function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [navigationHistory, setNavigationHistory] = useState<string[]>(['dashboard']);
 
   useEffect(() => {
     let mounted = true;
@@ -65,10 +66,38 @@ function App() {
     };
   }, []);
 
+  // Função melhorada para navegação com histórico
+  const handlePageChange = (page: string) => {
+    setCurrentPage(page);
+    setNavigationHistory(prev => {
+      const newHistory = [...prev];
+      // Remove a página atual se já existir no histórico
+      const existingIndex = newHistory.indexOf(page);
+      if (existingIndex !== -1) {
+        newHistory.splice(existingIndex, 1);
+      }
+      // Adiciona a nova página no final
+      newHistory.push(page);
+      // Mantém apenas os últimos 10 itens
+      return newHistory.slice(-10);
+    });
+  };
+
+  // Função para voltar à página anterior
+  const handleGoBack = () => {
+    if (navigationHistory.length > 1) {
+      const newHistory = [...navigationHistory];
+      newHistory.pop(); // Remove a página atual
+      const previousPage = newHistory[newHistory.length - 1] || 'dashboard';
+      setCurrentPage(previousPage);
+      setNavigationHistory(newHistory);
+    }
+  };
+
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return <EnhancedDashboard onNavigate={setCurrentPage} />;
+        return <EnhancedDashboard onNavigate={handlePageChange} />;
       case 'lancamentos':
         return <Lancamentos />;
       case 'contas':
@@ -94,7 +123,7 @@ function App() {
       case 'configuracoes':
         return <Configuracoes />;
       default:
-        return <EnhancedDashboard onNavigate={setCurrentPage} />;
+        return <EnhancedDashboard onNavigate={handlePageChange} />;
     }
   };
 
@@ -121,7 +150,9 @@ function App() {
   return (
     <Layout 
       currentPage={currentPage} 
-      onPageChange={setCurrentPage}
+      onPageChange={handlePageChange}
+      onGoBack={handleGoBack}
+      canGoBack={navigationHistory.length > 1}
       user={user}
     >
       {renderPage()}

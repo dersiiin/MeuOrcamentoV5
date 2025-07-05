@@ -8,6 +8,7 @@ type Lancamento = Tables['lancamentos']['Row'];
 type MetaFinanceira = Tables['metas_financeiras']['Row'];
 type Orcamento = Tables['orcamentos']['Row'];
 type Lembrete = Tables['lembretes']['Row'];
+type Patrimonio = Tables['patrimonio']['Row'];
 
 export class DatabaseService {
   // Categorias
@@ -181,6 +182,53 @@ export class DatabaseService {
   static async deleteLancamento(id: string): Promise<void> {
     const { error } = await supabase
       .from('lancamentos')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  }
+
+  // Patrimônio (para dívidas)
+  static async getPatrimonio(): Promise<Patrimonio[]> {
+    const { data, error } = await supabase
+      .from('patrimonio')
+      .select('*')
+      .eq('ativo', true)
+      .order('nome', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  static async createPatrimonio(patrimonio: Tables['patrimonio']['Insert']): Promise<Patrimonio> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuário não autenticado');
+
+    const { data, error } = await supabase
+      .from('patrimonio')
+      .insert({ ...patrimonio, user_id: user.id })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  static async updatePatrimonio(id: string, updates: Tables['patrimonio']['Update']): Promise<Patrimonio> {
+    const { data, error } = await supabase
+      .from('patrimonio')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  static async deletePatrimonio(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('patrimonio')
       .delete()
       .eq('id', id);
 
@@ -457,14 +505,12 @@ export class DatabaseService {
         categoria:categorias(nome, cor)
       `)
       .eq('tipo', 'DESPESA')
-      // CORREÇÃO: Alterado de .eq() para .in() para incluir lançamentos pendentes
       .in('status', ['CONFIRMADO', 'PENDENTE']) 
       .gte('data', dataInicio)
       .lte('data', dataFim);
 
     if (error) throw error;
 
-    // O restante da função para agrupar por categoria permanece o mesmo
     const grupos = (data || []).reduce((acc, item) => {
       const categoria = item.categoria?.nome || 'Sem categoria';
       const cor = item.categoria?.cor || '#6B7280';

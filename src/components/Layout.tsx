@@ -21,7 +21,8 @@ import {
   Scan,
   Camera,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ArrowLeft
 } from 'lucide-react';
 import { AuthService, type AuthUser } from '../lib/auth';
 import { DatabaseService } from '../lib/database';
@@ -33,6 +34,8 @@ interface LayoutProps {
   children: React.ReactNode;
   currentPage: string;
   onPageChange: (page: string) => void;
+  onGoBack?: () => void;
+  canGoBack?: boolean;
   user: AuthUser;
 }
 
@@ -54,7 +57,7 @@ const advancedMenuItems = [
   { id: 'ocr', label: 'OCR Recibos', icon: Camera },
 ];
 
-export function Layout({ children, currentPage, onPageChange, user }: LayoutProps) {
+export function Layout({ children, currentPage, onPageChange, onGoBack, canGoBack, user }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -305,16 +308,26 @@ export function Layout({ children, currentPage, onPageChange, user }: LayoutProp
         <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
-              {/* Mobile menu button */}
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <Menu className="w-6 h-6" />
-              </button>
+              {/* Left side - Mobile menu and back button */}
+              <div className="flex items-center space-x-3">
+                {/* Mobile menu button */}
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="lg:hidden p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <Menu className="w-6 h-6" />
+                </button>
 
-              {/* Page Title - Hidden on mobile */}
-              <div className="hidden sm:block">
+                {/* Back button */}
+                {canGoBack && onGoBack && (
+                  <button
+                    onClick={onGoBack}
+                    className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">Voltar</span>
+                  </button>
+                )}
               </div>
 
               {/* Right side actions */}

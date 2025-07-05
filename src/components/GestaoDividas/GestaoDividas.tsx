@@ -45,45 +45,39 @@ export function GestaoDividas() {
   const loadDividas = async () => {
     try {
       setLoading(true);
-      // Simular dados de dívidas (em produção, viria do banco)
-      const dividasSimuladas: Divida[] = [
-        {
-          id: '1',
-          nome: 'Financiamento Imóvel',
-          tipo: 'FINANCIAMENTO',
-          valor_total: 250000,
-          valor_pago: 45000,
-          valor_restante: 205000,
-          taxa_juros: 8.5,
-          data_inicio: '2023-01-15',
-          data_vencimento: '2043-01-15',
-          parcela_valor: 1850,
-          parcelas_total: 240,
-          parcelas_pagas: 24,
-          status: 'ATIVA',
-          observacoes: 'Financiamento habitacional Caixa',
-          created_at: '2023-01-15'
-        },
-        {
-          id: '2',
-          nome: 'Empréstimo Pessoal',
-          tipo: 'EMPRESTIMO',
-          valor_total: 15000,
-          valor_pago: 8500,
-          valor_restante: 6500,
-          taxa_juros: 12.0,
-          data_inicio: '2023-06-01',
-          data_vencimento: '2024-06-01',
-          parcela_valor: 1250,
-          parcelas_total: 12,
-          parcelas_pagas: 7,
-          status: 'ATIVA',
-          created_at: '2023-06-01'
-        }
-      ];
-      setDividas(dividasSimuladas);
+      // Usar a tabela de patrimônio para armazenar dívidas como valores negativos
+      const patrimonioData = await DatabaseService.getPatrimonio();
+      
+      // Filtrar apenas dívidas (valores negativos ou tipo específico)
+      const dividasData = patrimonioData
+        .filter(item => item.tipo === 'DIVIDA' || item.valor_atual < 0)
+        .map(item => ({
+          id: item.id,
+          nome: item.nome,
+          tipo: item.descricao?.includes('EMPRESTIMO') ? 'EMPRESTIMO' :
+                item.descricao?.includes('FINANCIAMENTO') ? 'FINANCIAMENTO' :
+                item.descricao?.includes('CARTAO') ? 'CARTAO_CREDITO' : 'OUTRO',
+          valor_total: Math.abs(item.valor_compra || item.valor_atual),
+          valor_pago: 0, // Calcular baseado nos lançamentos
+          valor_restante: Math.abs(item.valor_atual),
+          taxa_juros: 0, // Extrair da descrição se disponível
+          data_inicio: item.data_aquisicao || new Date().toISOString().split('T')[0],
+          data_vencimento: item.data_aquisicao || new Date().toISOString().split('T')[0],
+          parcela_valor: 0,
+          parcelas_total: 1,
+          parcelas_pagas: 0,
+          status: Math.abs(item.valor_atual) > 0 ? 'ATIVA' : 'QUITADA',
+          observacoes: item.descricao,
+          created_at: item.created_at || new Date().toISOString()
+        })) as Divida[];
+
+      setDividas(dividasData);
     } catch (error) {
       console.error('Erro ao carregar dívidas:', error);
+      if (error instanceof Error && error.message === 'Usuário não autenticado') {
+        await AuthService.signOut();
+        return;
+      }
     } finally {
       setLoading(false);
     }
@@ -93,39 +87,39 @@ export function GestaoDividas() {
     e.preventDefault();
     
     try {
+      setLoading(true);
       const valorTotal = parseFloat(formData.valor_total);
       const parcelasTotal = parseInt(formData.parcelas_total);
       const parcelaValor = valorTotal / parcelasTotal;
 
-      const novaDivida: Divida = {
-        id: crypto.randomUUID(),
+      const dividaData = {
         nome: formData.nome,
-        tipo: formData.tipo,
-        valor_total: valorTotal,
-        valor_pago: 0,
-        valor_restante: valorTotal,
-        taxa_juros: parseFloat(formData.taxa_juros),
-        data_inicio: formData.data_inicio,
-        data_vencimento: formData.data_vencimento,
-        parcela_valor: parcelaValor,
-        parcelas_total: parcelasTotal,
-        parcelas_pagas: 0,
-        status: 'ATIVA',
-        observacoes: formData.observacoes,
-        created_at: new Date().toISOString()
+        tipo: 'DIVIDA', // Usar tipo específico para dívidas
+        valor_atual: -Math.abs(valorTotal), // Valor negativo para representar dívida
+        valor_compra: valorTotal,
+        data_aquisicao: formData.data_inicio,
+        descricao: `${formData.tipo} - Taxa: ${formData.taxa_juros}% - Parcelas: ${parcelasTotal} - Vencimento: ${formData.data_vencimento} - ${formData.observacoes || ''}`,
+        ativo: true
       };
 
       if (editingDivida) {
-        setDividas(prev => prev.map(d => d.id === editingDivida ? { ...d, ...novaDivida, id: editingDivida } : d));
+        await DatabaseService.updatePatrimonio(editingDivida, dividaData);
       } else {
-        setDividas(prev => [...prev, novaDivida]);
+        await DatabaseService.createPatrimonio(dividaData);
       }
 
+      await loadDividas();
       resetForm();
       alert('Dívida salva com sucesso!');
     } catch (error) {
       console.error('Erro ao salvar dívida:', error);
+      if (error instanceof Error && error.message === 'Usuário não autenticado') {
+        await AuthService.signOut();
+        return;
+      }
       alert('Erro ao salvar dívida');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -144,9 +138,23 @@ export function GestaoDividas() {
     setShowForm(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir esta dívida?')) {
-      setDividas(prev => prev.filter(d => d.id !== id));
+      try {
+        setLoading(true);
+        await DatabaseService.deletePatrimonio(id);
+        await loadDividas();
+        alert('Dívida excluída com sucesso!');
+      } catch (error) {
+        console.error('Erro ao excluir dívida:', error);
+        if (error instanceof Error && error.message === 'Usuário não autenticado') {
+          await AuthService.signOut();
+          return;
+        }
+        alert('Erro ao excluir dívida');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -390,9 +398,10 @@ export function GestaoDividas() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                 >
-                  {editingDivida ? 'Salvar' : 'Criar'}
+                  {loading ? 'Salvando...' : (editingDivida ? 'Salvar' : 'Criar')}
                 </button>
               </div>
             </form>

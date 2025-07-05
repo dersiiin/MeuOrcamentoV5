@@ -325,6 +325,40 @@ export interface Database {
           antecedencia_dias?: number;
         };
       };
+      patrimonio: {
+        Row: {
+          id: string;
+          user_id: string;
+          nome: string;
+          tipo: 'IMOVEL' | 'VEICULO' | 'INVESTIMENTO' | 'DIVIDA' | 'OUTRO';
+          valor_atual: number;
+          valor_compra: number | null;
+          data_aquisicao: string | null;
+          descricao: string | null;
+          ativo: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          nome: string;
+          tipo: 'IMOVEL' | 'VEICULO' | 'INVESTIMENTO' | 'DIVIDA' | 'OUTRO';
+          valor_atual: number;
+          valor_compra?: number | null;
+          data_aquisicao?: string | null;
+          descricao?: string | null;
+          ativo?: boolean;
+        };
+        Update: {
+          nome?: string;
+          tipo?: 'IMOVEL' | 'VEICULO' | 'INVESTIMENTO' | 'DIVIDA' | 'OUTRO';
+          valor_atual?: number;
+          valor_compra?: number | null;
+          data_aquisicao?: string | null;
+          descricao?: string | null;
+          ativo?: boolean;
+        };
+      };
     };
   };
 }
