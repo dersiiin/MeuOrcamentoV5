@@ -3,11 +3,12 @@ import { formatCurrencyInput, parseCurrencyInput } from '../../lib/utils';
 
 interface CurrencyInputProps {
   value: string | number;
-  onChange: (value: string) => void;
+  onChange: (value: number) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
   error?: boolean;
+  required?: boolean;
 }
 
 export function CurrencyInput({ 
@@ -16,23 +17,28 @@ export function CurrencyInput({
   placeholder = "R$ 0,00", 
   className = "",
   disabled = false,
-  error = false
+  error = false,
+  required = false
 }: CurrencyInputProps) {
   const [displayValue, setDisplayValue] = useState('');
 
   useEffect(() => {
     if (typeof value === 'number') {
       setDisplayValue(formatCurrencyInput(value));
-    } else {
+    } else if (typeof value === 'string') {
       setDisplayValue(value);
+    } else {
+      setDisplayValue('');
     }
   }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
     const formattedValue = formatCurrencyInput(rawValue);
+    const numericValue = parseCurrencyInput(formattedValue);
+    
     setDisplayValue(formattedValue);
-    onChange(formattedValue);
+    onChange(numericValue);
   };
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -47,6 +53,7 @@ export function CurrencyInput({
       onFocus={handleFocus}
       placeholder={placeholder}
       disabled={disabled}
+      required={required}
       className={`${className} ${error ? 'border-red-300' : 'border-gray-300'}`}
     />
   );

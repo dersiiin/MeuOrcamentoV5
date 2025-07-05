@@ -3,6 +3,7 @@ import { Plus, Target, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, C
 import { DatabaseService } from '../../lib/database';
 import { AuthService } from '../../lib/auth';
 import { formatCurrency, formatDate } from '../../lib/utils';
+import { CurrencyInput } from '../Common/CurrencyInput';
 import { COLORS } from '../../constants';
 import type { Orcamento, Categoria, Lancamento } from '../../types';
 
@@ -19,7 +20,7 @@ export function Orcamentos() {
   });
   const [formData, setFormData] = useState({
     categoria_id: '',
-    valor_orcado: '',
+    valor_orcado: 0,
     alerta_percentual: 80,
   });
 
@@ -61,7 +62,7 @@ export function Orcamentos() {
         categoria_id: formData.categoria_id,
         ano: selectedPeriod.ano,
         mes: selectedPeriod.mes,
-        valor_orcado: parseFloat(formData.valor_orcado),
+        valor_orcado: formData.valor_orcado,
         alerta_percentual: formData.alerta_percentual,
       };
 
@@ -87,7 +88,7 @@ export function Orcamentos() {
     setEditingOrcamento(orcamento.id);
     setFormData({
       categoria_id: orcamento.categoria_id,
-      valor_orcado: orcamento.valor_orcado.toString(),
+      valor_orcado: orcamento.valor_orcado,
       alerta_percentual: orcamento.alerta_percentual,
     });
     setShowForm(true);
@@ -112,7 +113,7 @@ export function Orcamentos() {
   const resetForm = () => {
     setFormData({
       categoria_id: '',
-      valor_orcado: '',
+      valor_orcado: 0,
       alerta_percentual: 80,
     });
     setShowForm(false);
@@ -308,13 +309,11 @@ export function Orcamentos() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Valor Orçado *
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.valor_orcado}
-                  onChange={(e) => setFormData(prev => ({ ...prev, valor_orcado: e.target.value }))}
+                  onChange={(value) => setFormData(prev => ({ ...prev, valor_orcado: value }))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="0,00"
+                  placeholder="R$ 0,00"
                   required
                 />
               </div>

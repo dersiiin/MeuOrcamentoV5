@@ -3,6 +3,7 @@ import { Plus, Edit3, Trash2, CreditCard, TrendingUp, TrendingDown, AlertCircle 
 import { DatabaseService } from '../lib/database';
 import { AuthService } from '../lib/auth';
 import { formatCurrency } from '../lib/utils';
+import { CurrencyInput } from './Common/CurrencyInput';
 
 export function Contas() {
   const [contas, setContas] = useState<any[]>([]);
@@ -13,9 +14,9 @@ export function Contas() {
   const [formData, setFormData] = useState({
     nome: '',
     tipo: 'CORRENTE' as 'CORRENTE' | 'POUPANCA' | 'INVESTIMENTO' | 'CARTEIRA' | 'CARTAO_CREDITO',
-    saldo_inicial: '',
-    limite_credito: '',
-    valor_investido: '',
+    saldo_inicial: 0,
+    limite_credito: 0,
+    valor_investido: 0,
     banco: '',
     agencia: '',
     conta: '',
@@ -38,7 +39,6 @@ export function Contas() {
       setLancamentos(lancamentosData);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      // Handle authentication errors
       if (error instanceof Error && error.message === 'Usuário não autenticado') {
         await AuthService.signOut();
         return;
@@ -55,25 +55,18 @@ export function Contas() {
       errors.nome = 'Nome da conta é obrigatório';
     }
     
-    const saldoInicial = parseFloat(formData.saldo_inicial);
-    if (!formData.saldo_inicial || isNaN(saldoInicial)) {
-      errors.saldo_inicial = 'Saldo inicial é obrigatório e deve ser um número válido';
+    if (formData.saldo_inicial < 0) {
+      errors.saldo_inicial = 'Saldo inicial não pode ser negativo';
     }
 
-    // Validação específica para cartão de crédito
     if (formData.tipo === 'CARTAO_CREDITO') {
-      const limiteCredito = parseFloat(formData.limite_credito);
-      if (!formData.limite_credito || isNaN(limiteCredito) || limiteCredito <= 0) {
+      if (formData.limite_credito <= 0) {
         errors.limite_credito = 'Limite do cartão é obrigatório para contas de cartão de crédito';
       }
     }
 
-    // Validação para valor investido (opcional)
-    if (formData.valor_investido) {
-      const valorInvestido = parseFloat(formData.valor_investido);
-      if (isNaN(valorInvestido)) {
-        errors.valor_investido = 'Valor investido deve ser um número válido';
-      }
+    if (formData.valor_investido < 0) {
+      errors.valor_investido = 'Valor investido não pode ser negativo';
     }
     
     setFormErrors(errors);
@@ -91,9 +84,9 @@ export function Contas() {
       const contaData = {
         nome: formData.nome.trim(),
         tipo: formData.tipo,
-        saldo_inicial: parseFloat(formData.saldo_inicial),
-        limite_credito: formData.tipo === 'CARTAO_CREDITO' ? parseFloat(formData.limite_credito) : null,
-        valor_investido: formData.valor_investido ? parseFloat(formData.valor_investido) : null,
+        saldo_inicial: formData.saldo_inicial,
+        limite_credito: formData.tipo === 'CARTAO_CREDITO' ? formData.limite_credito : null,
+        valor_investido: formData.valor_investido > 0 ? formData.valor_investido : null,
         banco: formData.banco || null,
         agencia: formData.agencia || null,
         conta: formData.conta || null,
@@ -110,7 +103,6 @@ export function Contas() {
       resetForm();
     } catch (error) {
       console.error('Erro ao salvar conta:', error);
-      // Handle authentication errors
       if (error instanceof Error && error.message === 'Usuário não autenticado') {
         await AuthService.signOut();
         return;
@@ -124,9 +116,9 @@ export function Contas() {
     setFormData({
       nome: conta.nome,
       tipo: conta.tipo,
-      saldo_inicial: conta.saldo_inicial.toString(),
-      limite_credito: conta.limite_credito?.toString() || '',
-      valor_investido: conta.valor_investido?.toString() || '',
+      saldo_inicial: conta.saldo_inicial,
+      limite_credito: conta.limite_credito || 0,
+      valor_investido: conta.valor_investido || 0,
       banco: conta.banco || '',
       agencia: conta.agencia || '',
       conta: conta.conta || '',
@@ -148,7 +140,6 @@ export function Contas() {
         await loadData();
       } catch (error) {
         console.error('Erro ao excluir conta:', error);
-        // Handle authentication errors
         if (error instanceof Error && error.message === 'Usuário não autenticado') {
           await AuthService.signOut();
           return;
@@ -162,9 +153,9 @@ export function Contas() {
     setFormData({
       nome: '',
       tipo: 'CORRENTE',
-      saldo_inicial: '',
-      limite_credito: '',
-      valor_investido: '',
+      saldo_inicial: 0,
+      limite_credito: 0,
+      valor_investido: 0,
       banco: '',
       agencia: '',
       conta: '',
@@ -187,7 +178,6 @@ export function Contas() {
         .filter(l => l.tipo === 'DESPESA' && l.status === 'CONFIRMADO')
         .reduce((sum, l) => sum + l.valor, 0);
       
-      // Cálculo específico para cartão de crédito
       let limiteRestante = null;
       let utilizacaoPercentual = null;
       
@@ -330,15 +320,15 @@ export function Contas() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Saldo Inicial *
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.saldo_inicial}
-                  onChange={(e) => setFormData(prev => ({ ...prev, saldo_inicial: e.target.value }))}
+                  onChange={(value) => setFormData(prev => ({ ...prev, saldo_inicial: value }))}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     formErrors.saldo_inicial ? 'border-red-300' : 'border-gray-300'
                   }`}
-                  placeholder="0,00"
+                  placeholder="R$ 0,00"
+                  error={!!formErrors.saldo_inicial}
+                  required
                 />
                 {formErrors.saldo_inicial && (
                   <p className="text-red-600 text-sm mt-1">{formErrors.saldo_inicial}</p>
@@ -350,15 +340,15 @@ export function Contas() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Limite do Cartão *
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
+                  <CurrencyInput
                     value={formData.limite_credito}
-                    onChange={(e) => setFormData(prev => ({ ...prev, limite_credito: e.target.value }))}
+                    onChange={(value) => setFormData(prev => ({ ...prev, limite_credito: value }))}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       formErrors.limite_credito ? 'border-red-300' : 'border-gray-300'
                     }`}
-                    placeholder="0,00"
+                    placeholder="R$ 0,00"
+                    error={!!formErrors.limite_credito}
+                    required
                   />
                   {formErrors.limite_credito && (
                     <p className="text-red-600 text-sm mt-1">{formErrors.limite_credito}</p>
@@ -370,15 +360,14 @@ export function Contas() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Valor Investido (Opcional)
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.valor_investido}
-                  onChange={(e) => setFormData(prev => ({ ...prev, valor_investido: e.target.value }))}
+                  onChange={(value) => setFormData(prev => ({ ...prev, valor_investido: value }))}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     formErrors.valor_investido ? 'border-red-300' : 'border-gray-300'
                   }`}
-                  placeholder="0,00"
+                  placeholder="R$ 0,00"
+                  error={!!formErrors.valor_investido}
                 />
                 {formErrors.valor_investido && (
                   <p className="text-red-600 text-sm mt-1">{formErrors.valor_investido}</p>

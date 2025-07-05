@@ -28,7 +28,6 @@ import { AuthService, type AuthUser } from '../lib/auth';
 import { DatabaseService } from '../lib/database';
 import { UnifiedChatBot } from './ChatBot/UnifiedChatBot';
 import { NotificationPanel } from './Notifications/NotificationPanel';
-import { AnomaliaDetector } from './AnomaliaDetector/AnomaliaDetector';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -62,7 +61,6 @@ export function Layout({ children, currentPage, onPageChange, onGoBack, canGoBac
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [showAnomalias, setShowAnomalias] = useState(false);
   const [showAdvancedMenu, setShowAdvancedMenu] = useState(false);
   const [notificacoesPendentes, setNotificacoesPendentes] = useState<any[]>([]);
 
@@ -437,20 +435,6 @@ export function Layout({ children, currentPage, onPageChange, onGoBack, canGoBac
         {/* Main Content Area */}
         <main className="flex-1 overflow-auto">
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-            {/* Detector de Anomalias - Mostrar apenas no dashboard */}
-            {currentPage === 'dashboard' && (
-              <div className="mb-6">
-                <button
-                  onClick={() => setShowAnomalias(!showAnomalias)}
-                  className="mb-4 flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
-                >
-                  <span>{showAnomalias ? 'Ocultar' : 'Mostrar'} Detecção de Anomalias</span>
-                </button>
-                
-                {showAnomalias && <AnomaliaDetector />}
-              </div>
-            )}
-            
             {children}
           </div>
         </main>
