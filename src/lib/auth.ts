@@ -73,12 +73,14 @@ export class AuthService {
       const { data: { user }, error } = await supabase.auth.getUser();
       
       if (error) {
-        // Se houver erro de token, fazer logout automático
+        // Se houver erro de token, fazer logout automático silenciosamente
         if (error.message.includes('refresh_token_not_found') || 
-            error.message.includes('Invalid Refresh Token')) {
+            error.message.includes('Invalid Refresh Token') ||
+            error.message.includes('Auth session missing')) {
           await this.clearAuthAndReload();
           return null;
         }
+        // Para outros erros, ainda lançar a exceção
         throw error;
       }
 
@@ -103,15 +105,17 @@ export class AuthService {
         return user as AuthUser;
       }
     } catch (error) {
-      console.error('Error in getCurrentUser:', error);
-      
-      // Se for erro de token, limpar e recarregar
+      // Se for erro de token, limpar e recarregar silenciosamente
       if (error instanceof Error && 
           (error.message.includes('refresh_token_not_found') || 
-           error.message.includes('Invalid Refresh Token'))) {
+           error.message.includes('Invalid Refresh Token') ||
+           error.message.includes('Auth session missing'))) {
         await this.clearAuthAndReload();
+        return null;
       }
       
+      // Para outros erros, logar e retornar null
+      console.error('Error in getCurrentUser:', error);
       return null;
     }
   }
