@@ -56,7 +56,9 @@ function App() {
     const { data: { subscription } } = AuthService.onAuthStateChange((user) => {
       if (mounted) {
         setUser(user);
-        setLoading(false);
+        if (!loading) {
+          setLoading(false);
+        }
       }
     });
 
@@ -143,6 +145,7 @@ function App() {
   if (!user) {
     return <AuthPage onSuccess={() => {
       // O onAuthStateChange vai lidar com a mudança de estado
+      setLoading(false);
     }} />;
   }
 
