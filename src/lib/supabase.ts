@@ -7,7 +7,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
 // Tipos TypeScript para o banco
 export interface Database {
@@ -91,7 +97,7 @@ export interface Database {
           id: string;
           user_id: string;
           nome: string;
-          tipo: 'CORRENTE' | 'POUPANCA' | 'INVESTIMENTO' | 'CARTEIRA' | 'CARTAO_CREDITO';
+          tipo: 'CORRENTE' | 'POUPANCA' | 'INVESTIMENTO' | 'CARTEIRA';
           saldo_inicial: number;
           saldo_atual: number;
           limite_credito: number | null;
@@ -108,7 +114,7 @@ export interface Database {
         Insert: {
           user_id: string;
           nome: string;
-          tipo?: 'CORRENTE' | 'POUPANCA' | 'INVESTIMENTO' | 'CARTEIRA' | 'CARTAO_CREDITO';
+          tipo?: 'CORRENTE' | 'POUPANCA' | 'INVESTIMENTO' | 'CARTEIRA';
           saldo_inicial: number;
           limite_credito?: number | null;
           valor_investido?: number | null;
@@ -121,7 +127,7 @@ export interface Database {
         };
         Update: {
           nome?: string;
-          tipo?: 'CORRENTE' | 'POUPANCA' | 'INVESTIMENTO' | 'CARTEIRA' | 'CARTAO_CREDITO';
+          tipo?: 'CORRENTE' | 'POUPANCA' | 'INVESTIMENTO' | 'CARTEIRA';
           saldo_inicial?: number;
           limite_credito?: number | null;
           valor_investido?: number | null;
@@ -159,6 +165,7 @@ export interface Database {
           local: string | null;
           antecedencia_notificacao: number | null;
           arquivo_comprovante: string | null;
+          cartao_credito_usado: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -186,6 +193,7 @@ export interface Database {
           local?: string | null;
           antecedencia_notificacao?: number | null;
           arquivo_comprovante?: string | null;
+          cartao_credito_usado?: string | null;
         };
         Update: {
           conta_id?: string;
@@ -210,6 +218,7 @@ export interface Database {
           local?: string | null;
           antecedencia_notificacao?: number | null;
           arquivo_comprovante?: string | null;
+          cartao_credito_usado?: string | null;
         };
       };
       metas_financeiras: {
@@ -330,7 +339,7 @@ export interface Database {
           id: string;
           user_id: string;
           nome: string;
-          tipo: 'IMOVEL' | 'VEICULO' | 'INVESTIMENTO' | 'DIVIDA' | 'OUTRO';
+          tipo: 'IMOVEL' | 'VEICULO' | 'INVESTIMENTO' | 'OUTRO';
           valor_atual: number;
           valor_compra: number | null;
           data_aquisicao: string | null;
@@ -342,7 +351,7 @@ export interface Database {
         Insert: {
           user_id: string;
           nome: string;
-          tipo: 'IMOVEL' | 'VEICULO' | 'INVESTIMENTO' | 'DIVIDA' | 'OUTRO';
+          tipo: 'IMOVEL' | 'VEICULO' | 'INVESTIMENTO' | 'OUTRO';
           valor_atual: number;
           valor_compra?: number | null;
           data_aquisicao?: string | null;
@@ -351,7 +360,7 @@ export interface Database {
         };
         Update: {
           nome?: string;
-          tipo?: 'IMOVEL' | 'VEICULO' | 'INVESTIMENTO' | 'DIVIDA' | 'OUTRO';
+          tipo?: 'IMOVEL' | 'VEICULO' | 'INVESTIMENTO' | 'OUTRO';
           valor_atual?: number;
           valor_compra?: number | null;
           data_aquisicao?: string | null;

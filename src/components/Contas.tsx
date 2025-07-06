@@ -13,7 +13,7 @@ export function Contas() {
   const [editingConta, setEditingConta] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     nome: '',
-    tipo: 'CORRENTE' as 'CORRENTE' | 'POUPANCA' | 'INVESTIMENTO' | 'CARTEIRA' | 'CARTAO_CREDITO',
+    tipo: 'CORRENTE' as 'CORRENTE' | 'POUPANCA' | 'INVESTIMENTO' | 'CARTEIRA',
     saldo_inicial: 0,
     limite_credito: 0,
     valor_investido: 0,
@@ -59,10 +59,8 @@ export function Contas() {
       errors.saldo_inicial = 'Saldo inicial não pode ser negativo';
     }
 
-    if (formData.tipo === 'CARTAO_CREDITO') {
-      if (formData.limite_credito <= 0) {
-        errors.limite_credito = 'Limite do cartão é obrigatório para contas de cartão de crédito';
-      }
+    if (formData.limite_credito < 0) {
+      errors.limite_credito = 'Limite de crédito não pode ser negativo';
     }
 
     if (formData.valor_investido < 0) {
@@ -85,7 +83,7 @@ export function Contas() {
         nome: formData.nome.trim(),
         tipo: formData.tipo,
         saldo_inicial: formData.saldo_inicial,
-        limite_credito: formData.tipo === 'CARTAO_CREDITO' ? formData.limite_credito : null,
+        limite_credito: formData.limite_credito > 0 ? formData.limite_credito : null,
         valor_investido: formData.valor_investido > 0 ? formData.valor_investido : null,
         banco: formData.banco || null,
         agencia: formData.agencia || null,
@@ -177,13 +175,18 @@ export function Contas() {
       const despesasTotal = transacoesConta
         .filter(l => l.tipo === 'DESPESA' && l.status === 'CONFIRMADO')
         .reduce((sum, l) => sum + l.valor, 0);
+
+      // Calcular gastos específicos do cartão de crédito
+      const gastosCartao = transacoesConta
+        .filter(l => l.tipo === 'DESPESA' && l.status === 'CONFIRMADO' && l.cartao_credito_usado)
+        .reduce((sum, l) => sum + l.valor, 0);
       
       let limiteRestante = null;
       let utilizacaoPercentual = null;
       
-      if (conta.tipo === 'CARTAO_CREDITO' && conta.limite_credito) {
-        limiteRestante = conta.limite_credito - despesasTotal;
-        utilizacaoPercentual = (despesasTotal / conta.limite_credito) * 100;
+      if (conta.limite_credito && conta.limite_credito > 0) {
+        limiteRestante = conta.limite_credito - gastosCartao;
+        utilizacaoPercentual = (gastosCartao / conta.limite_credito) * 100;
       }
       
       return {
@@ -191,6 +194,7 @@ export function Contas() {
         transacoesCount: transacoesConta.length,
         receitasTotal,
         despesasTotal,
+        gastosCartao,
         limiteRestante,
         utilizacaoPercentual
       };
@@ -203,6 +207,7 @@ export function Contas() {
     const totalReceitas = contasComCalculos.reduce((sum, conta) => sum + conta.receitasTotal, 0);
     const totalDespesas = contasComCalculos.reduce((sum, conta) => sum + conta.despesasTotal, 0);
     const totalInvestido = contas.reduce((sum, conta) => sum + (conta.valor_investido || 0), 0);
+    const totalLimiteCredito = contas.reduce((sum, conta) => sum + (conta.limite_credito || 0), 0);
     
     return {
       saldoTotalInicial,
@@ -210,6 +215,7 @@ export function Contas() {
       totalReceitas,
       totalDespesas,
       totalInvestido,
+      totalLimiteCredito,
       variacao: saldoTotalAtual - saldoTotalInicial
     };
   }, [contas, contasComCalculos]);
@@ -243,28 +249,32 @@ export function Contas() {
       {contas.length > 0 && (
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Resumo Geral</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">{formatCurrency(resumoGeral.saldoTotalAtual)}</div>
-              <div className="text-sm text-gray-600">Saldo Total Atual</div>
+              <div className="text-sm text-gray-600">Saldo Total</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">{formatCurrency(resumoGeral.totalReceitas)}</div>
-              <div className="text-sm text-gray-600">Total Receitas</div>
+              <div className="text-sm text-gray-600">Receitas</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-red-600">{formatCurrency(resumoGeral.totalDespesas)}</div>
-              <div className="text-sm text-gray-600">Total Despesas</div>
+              <div className="text-sm text-gray-600">Despesas</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-purple-600">{formatCurrency(resumoGeral.totalInvestido)}</div>
-              <div className="text-sm text-gray-600">Total Investido</div>
+              <div className="text-sm text-gray-600">Investido</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-600">{formatCurrency(resumoGeral.totalLimiteCredito)}</div>
+              <div className="text-sm text-gray-600">Limite Crédito</div>
             </div>
             <div className="text-center">
               <div className={`text-2xl font-bold ${resumoGeral.variacao >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {resumoGeral.variacao >= 0 ? '+' : ''}{formatCurrency(resumoGeral.variacao)}
               </div>
-              <div className="text-sm text-gray-600">Variação Total</div>
+              <div className="text-sm text-gray-600">Variação</div>
             </div>
           </div>
         </div>
@@ -312,7 +322,6 @@ export function Contas() {
                   <option value="POUPANCA">Poupança</option>
                   <option value="INVESTIMENTO">Investimento</option>
                   <option value="CARTEIRA">Carteira</option>
-                  <option value="CARTAO_CREDITO">Cartão de Crédito</option>
                 </select>
               </div>
 
@@ -335,26 +344,26 @@ export function Contas() {
                 )}
               </div>
 
-              {formData.tipo === 'CARTAO_CREDITO' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Limite do Cartão *
-                  </label>
-                  <CurrencyInput
-                    value={formData.limite_credito}
-                    onChange={(value) => setFormData(prev => ({ ...prev, limite_credito: value }))}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      formErrors.limite_credito ? 'border-red-300' : 'border-gray-300'
-                    }`}
-                    placeholder="R$ 0,00"
-                    error={!!formErrors.limite_credito}
-                    required
-                  />
-                  {formErrors.limite_credito && (
-                    <p className="text-red-600 text-sm mt-1">{formErrors.limite_credito}</p>
-                  )}
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Limite do Cartão de Crédito
+                </label>
+                <CurrencyInput
+                  value={formData.limite_credito}
+                  onChange={(value) => setFormData(prev => ({ ...prev, limite_credito: value }))}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    formErrors.limite_credito ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="R$ 0,00"
+                  error={!!formErrors.limite_credito}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Deixe em branco se a conta não possui cartão de crédito
+                </p>
+                {formErrors.limite_credito && (
+                  <p className="text-red-600 text-sm mt-1">{formErrors.limite_credito}</p>
+                )}
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -492,14 +501,21 @@ export function Contas() {
                         </span>
                       </div>
 
-                      {/* Informações específicas para cartão de crédito */}
-                      {conta.tipo === 'CARTAO_CREDITO' && conta.limite_credito && (
+                      {/* Informações do cartão de crédito */}
+                      {conta.limite_credito && conta.limite_credito > 0 && (
                         <div className="pt-3 border-t border-gray-100">
                           <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm text-gray-600">Limite Total:</span>
+                            <span className="text-sm text-gray-600">Limite do Cartão:</span>
                             <span className="text-sm font-medium">{formatCurrency(conta.limite_credito)}</span>
                           </div>
                           
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm text-gray-600">Usado no Cartão:</span>
+                            <span className="text-sm font-medium text-red-600">
+                              {formatCurrency(conta.gastosCartao)}
+                            </span>
+                          </div>
+
                           <div className="flex justify-between items-center mb-2">
                             <span className="text-sm text-gray-600">Limite Restante:</span>
                             <span className={`text-sm font-medium ${
@@ -512,7 +528,7 @@ export function Contas() {
                           {/* Barra de utilização do cartão */}
                           <div className="mt-2">
                             <div className="flex justify-between items-center mb-1">
-                              <span className="text-xs text-gray-500">Utilização</span>
+                              <span className="text-xs text-gray-500">Utilização do Cartão</span>
                               <span className="text-xs text-gray-500">{conta.utilizacaoPercentual?.toFixed(1)}%</span>
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-2">

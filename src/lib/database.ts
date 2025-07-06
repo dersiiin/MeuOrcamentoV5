@@ -543,6 +543,7 @@ export class DatabaseService {
       `)
       .eq('conta_id', contaId)
       .eq('tipo', 'DESPESA')
+      .not('cartao_credito_usado', 'is', null)
       .gte('data', dataInicio)
       .lte('data', dataFim)
       .order('data', { ascending: false });
@@ -577,6 +578,7 @@ export class DatabaseService {
       .update({ status: 'CONFIRMADO' })
       .eq('conta_id', contaId)
       .eq('tipo', 'DESPESA')
+      .not('cartao_credito_usado', 'is', null)
       .gte('data', dataInicio)
       .lte('data', dataFim);
 

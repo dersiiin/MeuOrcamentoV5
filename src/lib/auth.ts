@@ -56,6 +56,14 @@ export class AuthService {
   }
 
   static async signOut() {
+    // Limpar localStorage antes do logout
+    try {
+      localStorage.removeItem('supabase.auth.token');
+      sessionStorage.clear();
+    } catch (error) {
+      console.warn('Error clearing storage:', error);
+    }
+
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   }
@@ -64,7 +72,17 @@ export class AuthService {
     try {
       const { data: { user }, error } = await supabase.auth.getUser();
       
-      if (error || !user) {
+      if (error) {
+        // Se houver erro de token, fazer logout automático
+        if (error.message.includes('refresh_token_not_found') || 
+            error.message.includes('Invalid Refresh Token')) {
+          await this.clearAuthAndReload();
+          return null;
+        }
+        throw error;
+      }
+
+      if (!user) {
         return null;
       }
 
@@ -86,7 +104,36 @@ export class AuthService {
       }
     } catch (error) {
       console.error('Error in getCurrentUser:', error);
+      
+      // Se for erro de token, limpar e recarregar
+      if (error instanceof Error && 
+          (error.message.includes('refresh_token_not_found') || 
+           error.message.includes('Invalid Refresh Token'))) {
+        await this.clearAuthAndReload();
+      }
+      
       return null;
+    }
+  }
+
+  static async clearAuthAndReload() {
+    try {
+      // Limpar todos os dados de autenticação
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Limpar cookies do Supabase
+      document.cookie.split(";").forEach((c) => {
+        const eqPos = c.indexOf("=");
+        const name = eqPos > -1 ? c.substr(0, eqPos) : c;
+        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      });
+
+      // Recarregar a página para reinicializar o estado
+      window.location.reload();
+    } catch (error) {
+      console.error('Error clearing auth:', error);
+      window.location.reload();
     }
   }
 
@@ -147,31 +194,41 @@ export class AuthService {
   }
 
   static onAuthStateChange(callback: (user: AuthUser | null) => void) {
-    return supabase.auth.onAuthStateChange((event, session) => {
+    return supabase.auth.onAuthStateChange(async (event, session) => {
+      // Se o evento for de erro de token, limpar e recarregar
+      if (event === 'TOKEN_REFRESHED' && !session) {
+        await this.clearAuthAndReload();
+        return;
+      }
+
       if (session?.user) {
         // Buscar o perfil para garantir que o tema seja aplicado
-        supabase
-          .from('profiles')
-          .select('nome, avatar_url, moeda, tema, notificacoes_email, notificacoes_push')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data: profile, error }) => {
-            if (error) {
-              console.error('Error fetching profile on auth state change:', error);
-              callback(session.user as AuthUser);
-            } else {
-              // Aplicar tema se disponível
-              if (profile?.tema) {
-                this.applyTheme(profile.tema);
-              }
-              
-              const fullUser: AuthUser = {
-                ...session.user,
-                profile: profile || undefined,
-              };
-              callback(fullUser);
+        try {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('nome, avatar_url, moeda, tema, notificacoes_email, notificacoes_push')
+            .eq('id', session.user.id)
+            .single();
+
+          if (error) {
+            console.error('Error fetching profile on auth state change:', error);
+            callback(session.user as AuthUser);
+          } else {
+            // Aplicar tema se disponível
+            if (profile?.tema) {
+              this.applyTheme(profile.tema);
             }
-          });
+            
+            const fullUser: AuthUser = {
+              ...session.user,
+              profile: profile || undefined,
+            };
+            callback(fullUser);
+          }
+        } catch (error) {
+          console.error('Error in auth state change:', error);
+          callback(session.user as AuthUser);
+        }
       } else {
         callback(null);
       }

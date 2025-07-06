@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit3, Trash2, Calendar, DollarSign, Search, Filter, X, CheckCircle, Clock, XCircle, Upload } from 'lucide-react';
+import { Plus, Edit3, Trash2, Calendar, DollarSign, Search, Filter, X, CheckCircle, Clock, XCircle, CreditCard } from 'lucide-react';
 import { DatabaseService } from '../lib/database';
 import { AuthService } from '../lib/auth';
 import { formatCurrency, formatDate, createParcelaLancamentos, parseCurrencyInput } from '../lib/utils';
@@ -32,6 +32,7 @@ export function Lancamentos() {
     observacoes: '',
     status: 'CONFIRMADO' as 'PENDENTE' | 'CONFIRMADO' | 'CANCELADO',
     antecedencia_notificacao: 3,
+    cartao_credito_usado: '',
     isParcelado: false,
     numeroParcelas: 2,
   });
@@ -110,6 +111,7 @@ export function Lancamentos() {
         observacoes: formData.observacoes || null,
         status: formData.status,
         antecedencia_notificacao: formData.antecedencia_notificacao,
+        cartao_credito_usado: formData.cartao_credito_usado || null,
       };
 
       if (editingLancamento) {
@@ -149,6 +151,7 @@ export function Lancamentos() {
       observacoes: lancamento.observacoes || '',
       status: lancamento.status,
       antecedencia_notificacao: lancamento.antecedencia_notificacao || 3,
+      cartao_credito_usado: lancamento.cartao_credito_usado || '',
       isParcelado: false,
       numeroParcelas: 2,
     });
@@ -196,6 +199,7 @@ export function Lancamentos() {
       observacoes: '',
       status: 'CONFIRMADO',
       antecedencia_notificacao: 3,
+      cartao_credito_usado: '',
       isParcelado: false,
       numeroParcelas: 2,
     });
@@ -253,6 +257,10 @@ export function Lancamentos() {
 
   const categoriasFiltered = categorias.filter(c => c.tipo === formData.tipo);
   const hasActiveFilters = filters.tipo !== 'TODOS' || filters.status !== 'TODOS' || filters.categoriaId || filters.contaId || filters.dataInicio || filters.dataFim || searchTerm;
+
+  // Verificar se a conta selecionada tem cartão de crédito
+  const contaSelecionada = contas.find(c => c.id === formData.conta_id);
+  const temCartaoCredito = contaSelecionada?.limite_credito && contaSelecionada.limite_credito > 0;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -556,7 +564,7 @@ export function Lancamentos() {
                 </label>
                 <select
                   value={formData.conta_id}
-                  onChange={(e) => setFormData(prev => ({ ...prev, conta_id: e.target.value }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, conta_id: e.target.value, cartao_credito_usado: '' }))}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     formErrors.conta_id ? 'border-red-300' : 'border-gray-300'
                   }`}
@@ -564,7 +572,7 @@ export function Lancamentos() {
                   <option value="">Selecione uma conta</option>
                   {contas.map(conta => (
                     <option key={conta.id} value={conta.id}>
-                      {conta.nome}
+                      {conta.nome} {conta.limite_credito ? '(com cartão)' : ''}
                     </option>
                   ))}
                 </select>
@@ -572,6 +580,26 @@ export function Lancamentos() {
                   <p className="text-red-600 text-sm mt-1">{formErrors.conta_id}</p>
                 )}
               </div>
+
+              {/* Campo de cartão de crédito - só aparece se a conta tem limite e é despesa */}
+              {temCartaoCredito && formData.tipo === 'DESPESA' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <CreditCard className="w-4 h-4 inline mr-1" />
+                    Cartão de Crédito Usado
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.cartao_credito_usado}
+                    onChange={(e) => setFormData(prev => ({ ...prev, cartao_credito_usado: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Ex: Visa, Mastercard, Elo..."
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Deixe em branco se não foi usado o cartão de crédito
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -705,6 +733,12 @@ export function Lancamentos() {
                             {getStatusIcon(lancamento.status)}
                             <span>{lancamento.status}</span>
                           </span>
+                          {lancamento.cartao_credito_usado && (
+                            <span className="inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700">
+                              <CreditCard className="w-3 h-3" />
+                              <span>{lancamento.cartao_credito_usado}</span>
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center space-x-2 text-sm text-gray-500">
                           <Calendar className="w-4 h-4 flex-shrink-0" />

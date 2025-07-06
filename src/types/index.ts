@@ -37,7 +37,7 @@ export interface Conta {
   id: string;
   user_id: string;
   nome: string;
-  tipo: 'CORRENTE' | 'POUPANCA' | 'INVESTIMENTO' | 'CARTEIRA' | 'CARTAO_CREDITO';
+  tipo: 'CORRENTE' | 'POUPANCA' | 'INVESTIMENTO' | 'CARTEIRA';
   saldo_inicial: number;
   saldo_atual: number;
   limite_credito: number | null;
@@ -76,6 +76,7 @@ export interface Lancamento {
   longitude: number | null;
   local: string | null;
   antecedencia_notificacao: number | null;
+  cartao_credito_usado: string | null;
   created_at: string;
   updated_at: string;
   categoria?: Categoria;
