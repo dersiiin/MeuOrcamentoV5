@@ -574,30 +574,32 @@ export function Contas() {
                         <div className="flex justify-between items-center">
                           <div className="flex items-center space-x-1">
                             <TrendingDown className="w-4 h-4 text-red-600" />
-                            <span className="text-sm text-gray-600">Despesas:</span>
-                          </div>
+            <div className={`text-2xl font-bold ${resumoGeral.saldoTotalAtual >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatCurrency(resumoGeral.saldoTotalAtual)}
+            </div>
+            <div className="text-sm text-gray-600">Saldo Líquido Total</div>
                           <span className="text-sm font-medium text-red-600">
                             {formatCurrency(conta.despesasTotal)}
                           </span>
-                        </div>
+            <div className="text-sm text-gray-600">Total Receitas</div>
                       </div>
                       
                       {conta.banco && (
-                        <div className="pt-2 text-xs text-gray-500">
+            <div className="text-sm text-gray-600">Total Despesas</div>
                           {conta.banco} {conta.agencia && `• Ag: ${conta.agencia}`} {conta.conta && `• Cc: ${conta.conta}`}
                         </div>
                       )}
-                    </div>
+            <div className="text-sm text-gray-600">Total Investido</div>
                   </div>
                 );
               })}
-            </div>
+            <div className="text-sm text-gray-600">Limite Total Cartões</div>
           ) : (
             <div className="text-center text-gray-500 py-12">
-              <CreditCard className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium">Nenhuma conta cadastrada</p>
+            <div className={`text-2xl font-bold ${(resumoGeral.totalLimiteCredito - contasComCalculos.reduce((sum, c) => sum + (c.gastosCartao || 0), 0)) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatCurrency(resumoGeral.totalLimiteCredito - contasComCalculos.reduce((sum, c) => sum + (c.gastosCartao || 0), 0))}
               <p className="text-sm mt-1">Crie sua primeira conta para começar!</p>
-            </div>
+            <div className="text-sm text-gray-600">Limite Disponível</div>
           )}
         </div>
       </div>

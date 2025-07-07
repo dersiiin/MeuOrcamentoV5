@@ -110,19 +110,37 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
     const diasNoMes = new Date().getDate();
     const gastoDiarioMedio = despesas / diasNoMes;
     
-    // Calcular patrimônio líquido
-    const patrimonioLiquido = contas.reduce((sum, conta) => {
-      if (conta.tipo === 'CARTAO_CREDITO') {
-        return sum - Math.abs(conta.saldo_atual); // Cartão é dívida
-      }
-      return sum + conta.saldo_atual;
-    }, 0);
+    // Calcular saldo líquido total (soma de todas as contas)
+    const saldoLiquidoTotal = contas.reduce((sum, conta) => sum + conta.saldo_atual, 0);
+    
+    // Calcular limite disponível em cartões
+    const totalLimiteCredito = contas.reduce((sum, conta) => sum + (conta.limite_credito || 0), 0);
+    const totalUsadoCartao = lancamentos
+      .filter(l => l.tipo === 'DESPESA' && l.status === 'CONFIRMADO' && l.cartao_credito_usado)
+      .reduce((sum, l) => sum + l.valor, 0);
+    const limiteDisponivelCartao = totalLimiteCredito - totalUsadoCartao;
 
     return [
       {
+        label: 'Saldo Líquido Total',
+        value: formatCurrency(saldoLiquidoTotal),
+        change: saldoLiquidoTotal >= 0 ? 1 : -1,
+        trend: saldoLiquidoTotal >= 0 ? 'up' : 'down',
+        color: saldoLiquidoTotal >= 0 ? 'text-green-600' : 'text-red-600',
+        icon: 'Wallet'
+      },
+      {
+        label: 'Limite Disponível Cartão',
+        value: formatCurrency(limiteDisponivelCartao),
+        change: limiteDisponivelCartao > totalLimiteCredito * 0.5 ? 1 : limiteDisponivelCartao > totalLimiteCredito * 0.2 ? 0 : -1,
+        trend: limiteDisponivelCartao > totalLimiteCredito * 0.5 ? 'up' : limiteDisponivelCartao > totalLimiteCredito * 0.2 ? 'stable' : 'down',
+        color: limiteDisponivelCartao > totalLimiteCredito * 0.5 ? 'text-green-600' : limiteDisponivelCartao > totalLimiteCredito * 0.2 ? 'text-yellow-600' : 'text-red-600',
+        icon: 'CreditCard'
+      },
+      {
         label: 'Saldo do Período',
         value: formatCurrency(saldo),
-        change: saldo >= 0 ? 0 : -1,
+        change: saldo >= 0 ? 1 : -1,
         trend: saldo >= 0 ? 'up' : 'down',
         color: saldo >= 0 ? 'text-green-600' : 'text-red-600',
         icon: 'DollarSign'
@@ -134,22 +152,6 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
         trend: taxaPoupanca >= 20 ? 'up' : taxaPoupanca >= 10 ? 'stable' : 'down',
         color: taxaPoupanca >= 20 ? 'text-green-600' : taxaPoupanca >= 10 ? 'text-yellow-600' : 'text-red-600',
         icon: 'Percent'
-      },
-      {
-        label: 'Gasto Diário Médio',
-        value: formatCurrency(gastoDiarioMedio),
-        change: 0,
-        trend: 'stable',
-        color: 'text-blue-600',
-        icon: 'Calendar'
-      },
-      {
-        label: 'Patrimônio Líquido',
-        value: formatCurrency(patrimonioLiquido),
-        change: patrimonioLiquido >= 0 ? 1 : -1,
-        trend: patrimonioLiquido >= 0 ? 'up' : 'down',
-        color: patrimonioLiquido >= 0 ? 'text-green-600' : 'text-red-600',
-        icon: 'Wallet'
       }
     ];
   };
@@ -169,12 +171,20 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
     const diasNoMes = new Date().getDate();
     const gastoDiarioMedio = despesas / diasNoMes;
     
-    const patrimonioLiquido = data.contas.reduce((sum, conta) => {
-      if (conta.tipo === 'CARTAO_CREDITO') {
-        return sum - Math.abs(conta.saldo_atual);
-      }
-      return sum + conta.saldo_atual;
+    // Calcular patrimônio líquido considerando saldos reais das contas
+    const patrimonioLiquido = data.contas.reduce((sum, conta) => sum + conta.saldo_atual, 0);
+    
+    // Calcular total disponível em cartões de crédito
+    const totalLimiteCredito = data.contas.reduce((sum, conta) => {
+      return sum + (conta.limite_credito || 0);
     }, 0);
+    
+    // Calcular total usado nos cartões
+    const totalUsadoCartao = data.lancamentos
+      .filter(l => l.tipo === 'DESPESA' && l.status === 'CONFIRMADO' && l.cartao_credito_usado)
+      .reduce((sum, l) => sum + l.valor, 0);
+    
+    const limiteDisponivelCartao = totalLimiteCredito - totalUsadoCartao;
     
     return {
       receitas,
@@ -182,7 +192,10 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
       saldo,
       taxaPoupanca,
       gastoDiarioMedio,
-      patrimonioLiquido
+      patrimonioLiquido,
+      totalLimiteCredito,
+      totalUsadoCartao,
+      limiteDisponivelCartao
     };
   }, [data.lancamentos, data.contas]);
 

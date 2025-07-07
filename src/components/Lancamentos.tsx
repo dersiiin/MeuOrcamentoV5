@@ -796,7 +796,7 @@ export function Lancamentos() {
 
                         <div 
                           className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
-                          style={{ backgroundColor: categoria?.cor + '20' }}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                         >
                           {(item.tipo_transacao || item.tipo) === 'RECEITA' ? (
                             <DollarSign className="w-6 h-6 text-green-600" />
@@ -852,15 +852,15 @@ export function Lancamentos() {
                         <div className={`font-semibold text-lg ${
                           (item.tipo_transacao || item.tipo) === 'RECEITA' ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {(item.tipo_transacao || item.tipo) === 'RECEITA' ? '+' : '-'} {formatCurrency(item.valor)}
+                          {(item.tipo_transacao || item.tipo) === 'RECEITA' ? '+' : '-'}{formatCurrency(item.valor)}
                         </div>
                         
                         {item.tipo !== 'grupo_parcelas' && (
-                          <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 transition-opacity">
+                          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 lg:opacity-0 lg:group-hover:opacity-100">
                             {item.status !== 'CONFIRMADO' && (
                               <button 
                                 onClick={() => handleStatusChange(item.id, 'CONFIRMADO')}
-                                className="p-1 text-gray-400 hover:text-green-600 transition-colors"
+                                className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200"
                                 title="Confirmar"
                               >
                                 <CheckCircle className="w-4 h-4" />
@@ -869,7 +869,7 @@ export function Lancamentos() {
                             {item.status !== 'PENDENTE' && (
                               <button 
                                 onClick={() => handleStatusChange(item.id, 'PENDENTE')}
-                                className="p-1 text-gray-400 hover:text-yellow-600 transition-colors"
+                                className="p-2 text-gray-500 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-all duration-200"
                                 title="Marcar como Pendente"
                               >
                                 <Clock className="w-4 h-4" />
@@ -878,7 +878,7 @@ export function Lancamentos() {
                             {item.status !== 'CANCELADO' && (
                               <button 
                                 onClick={() => handleStatusChange(item.id, 'CANCELADO')}
-                                className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
                                 title="Cancelar"
                               >
                                 <XCircle className="w-4 h-4" />
@@ -887,19 +887,16 @@ export function Lancamentos() {
                             
                             <button 
                               onClick={() => handleEdit(item)}
-                              className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                              className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
                               title="Editar"
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
                             <button 
                               onClick={() => handleDelete(item.id)}
-                              className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                          <TrendingUp className="w-6 h-6 text-green-600" />
                               title="Excluir"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                          <TrendingDown className="w-6 h-6 text-red-600" />
                         )}
                       </div>
                     </div>
@@ -932,7 +929,7 @@ export function Lancamentos() {
                                     {parcela.status !== 'CONFIRMADO' && (
                                       <button 
                                         onClick={() => handleStatusChange(parcela.id, 'CONFIRMADO')}
-                                        className="p-1 text-gray-400 hover:text-green-600 transition-colors"
+                                        className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded transition-all duration-200"
                                         title="Confirmar"
                                       >
                                         <CheckCircle className="w-4 h-4" />
@@ -941,7 +938,7 @@ export function Lancamentos() {
                                     {parcela.status !== 'PENDENTE' && (
                                       <button 
                                         onClick={() => handleStatusChange(parcela.id, 'PENDENTE')}
-                                        className="p-1 text-gray-400 hover:text-yellow-600 transition-colors"
+                                        className="p-1.5 text-gray-500 hover:text-yellow-600 hover:bg-yellow-50 rounded transition-all duration-200"
                                         title="Marcar como Pendente"
                                       >
                                         <Clock className="w-4 h-4" />
@@ -949,14 +946,14 @@ export function Lancamentos() {
                                     )}
                                     <button 
                                       onClick={() => handleEdit(parcela)}
-                                      className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                                      className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200"
                                       title="Editar"
                                     >
                                       <Edit3 className="w-4 h-4" />
                                     </button>
                                     <button 
                                       onClick={() => handleDelete(parcela.id)}
-                                      className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                      className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-all duration-200"
                                       title="Excluir"
                                     >
                                       <Trash2 className="w-4 h-4" />

@@ -159,6 +159,9 @@ export interface FinancialSummary {
   taxaPoupanca: number;
   gastoDiarioMedio: number;
   patrimonioLiquido: number;
+  totalLimiteCredito: number;
+  totalUsadoCartao: number;
+  limiteDisponivelCartao: number;
 }
 
 export interface ChartData {
