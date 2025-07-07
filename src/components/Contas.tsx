@@ -208,6 +208,8 @@ export function Contas() {
     const totalDespesas = contasComCalculos.reduce((sum, conta) => sum + conta.despesasTotal, 0);
     const totalInvestido = contas.reduce((sum, conta) => sum + (conta.valor_investido || 0), 0);
     const totalLimiteCredito = contas.reduce((sum, conta) => sum + (conta.limite_credito || 0), 0);
+    const totalUsadoCartao = contasComCalculos.reduce((sum, conta) => sum + (conta.gastosCartao || 0), 0);
+    const limiteDisponivelCartao = totalLimiteCredito - totalUsadoCartao;
     
     return {
       saldoTotalInicial,
@@ -216,6 +218,8 @@ export function Contas() {
       totalDespesas,
       totalInvestido,
       totalLimiteCredito,
+      totalUsadoCartao,
+      limiteDisponivelCartao,
       variacao: saldoTotalAtual - saldoTotalInicial
     };
   }, [contas, contasComCalculos]);
@@ -251,30 +255,32 @@ export function Contas() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Resumo Geral</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{formatCurrency(resumoGeral.saldoTotalAtual)}</div>
-              <div className="text-sm text-gray-600">Saldo Total</div>
+              <div className={`text-2xl font-bold ${resumoGeral.saldoTotalAtual >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(resumoGeral.saldoTotalAtual)}
+              </div>
+              <div className="text-sm text-gray-600">Saldo Líquido Total</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">{formatCurrency(resumoGeral.totalReceitas)}</div>
-              <div className="text-sm text-gray-600">Receitas</div>
+              <div className="text-sm text-gray-600">Total Receitas</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-red-600">{formatCurrency(resumoGeral.totalDespesas)}</div>
-              <div className="text-sm text-gray-600">Despesas</div>
+              <div className="text-sm text-gray-600">Total Despesas</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-purple-600">{formatCurrency(resumoGeral.totalInvestido)}</div>
-              <div className="text-sm text-gray-600">Investido</div>
+              <div className="text-sm text-gray-600">Total Investido</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-orange-600">{formatCurrency(resumoGeral.totalLimiteCredito)}</div>
-              <div className="text-sm text-gray-600">Limite Crédito</div>
+              <div className="text-sm text-gray-600">Limite Total Cartões</div>
             </div>
             <div className="text-center">
-              <div className={`text-2xl font-bold ${resumoGeral.variacao >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {resumoGeral.variacao >= 0 ? '+' : ''}{formatCurrency(resumoGeral.variacao)}
+              <div className={`text-2xl font-bold ${resumoGeral.limiteDisponivelCartao >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(resumoGeral.limiteDisponivelCartao)}
               </div>
-              <div className="text-sm text-gray-600">Variação</div>
+              <div className="text-sm text-gray-600">Limite Disponível</div>
             </div>
           </div>
         </div>
@@ -574,32 +580,30 @@ export function Contas() {
                         <div className="flex justify-between items-center">
                           <div className="flex items-center space-x-1">
                             <TrendingDown className="w-4 h-4 text-red-600" />
-            <div className={`text-2xl font-bold ${resumoGeral.saldoTotalAtual >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(resumoGeral.saldoTotalAtual)}
-            </div>
-            <div className="text-sm text-gray-600">Saldo Líquido Total</div>
+                            <span className="text-sm text-gray-600">Despesas:</span>
+                          </div>
                           <span className="text-sm font-medium text-red-600">
                             {formatCurrency(conta.despesasTotal)}
                           </span>
-            <div className="text-sm text-gray-600">Total Receitas</div>
+                        </div>
                       </div>
                       
                       {conta.banco && (
-            <div className="text-sm text-gray-600">Total Despesas</div>
+                        <div className="pt-2 text-xs text-gray-500">
                           {conta.banco} {conta.agencia && `• Ag: ${conta.agencia}`} {conta.conta && `• Cc: ${conta.conta}`}
                         </div>
                       )}
-            <div className="text-sm text-gray-600">Total Investido</div>
+                    </div>
                   </div>
                 );
               })}
-            <div className="text-sm text-gray-600">Limite Total Cartões</div>
+            </div>
           ) : (
             <div className="text-center text-gray-500 py-12">
-            <div className={`text-2xl font-bold ${(resumoGeral.totalLimiteCredito - contasComCalculos.reduce((sum, c) => sum + (c.gastosCartao || 0), 0)) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(resumoGeral.totalLimiteCredito - contasComCalculos.reduce((sum, c) => sum + (c.gastosCartao || 0), 0))}
+              <CreditCard className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p className="text-lg font-medium">Nenhuma conta cadastrada</p>
               <p className="text-sm mt-1">Crie sua primeira conta para começar!</p>
-            <div className="text-sm text-gray-600">Limite Disponível</div>
+            </div>
           )}
         </div>
       </div>
