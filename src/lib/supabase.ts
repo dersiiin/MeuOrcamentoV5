@@ -3,8 +3,32 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Função para exibir um erro visível na tela em caso de falha de configuração.
+function showConfigurationError() {
+  const root = document.getElementById('root');
+  if (root) {
+    root.innerHTML = `
+      <div style="font-family: sans-serif; padding: 2rem; text-align: center; background-color: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 8px; margin: 2rem;">
+        <h1 style="font-size: 1.5rem; font-weight: bold;">Erro de Configuração</h1>
+        <p style="margin-top: 1rem;">
+          As variáveis de ambiente do Supabase (VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY) não foram encontradas.
+        </p>
+        <p style="margin-top: 0.5rem;">
+          Por favor, crie um arquivo <code>.env</code> na raiz do projeto e adicione as suas credenciais do Supabase.
+        </p>
+        <p style="margin-top: 1rem; font-size: 0.875rem; color: #7f1d1d;">
+          Lembre-se de reiniciar o servidor de desenvolvimento após criar o arquivo.
+        </p>
+      </div>
+    `;
+  }
+}
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  console.error('Erro: Variáveis de ambiente do Supabase não configuradas.');
+  showConfigurationError();
+  // Lançar o erro impede o resto do código de ser executado com uma configuração inválida.
+  throw new Error('Missing Supabase environment variables. Check the on-screen message.');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

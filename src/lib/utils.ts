@@ -37,7 +37,13 @@ export function formatCurrencyInput(value: string | number): string {
   }).format(numberValue);
 }
 
-export function parseCurrencyInput(value: string): number {
+export function parseCurrencyInput(value: string | number): number {
+  // Se o valor já for um número, podemos simplesmente retorná-lo.
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  // Se for uma string, continuamos com a lógica original.
   // Remove tudo que não é dígito
   const numericValue = value.replace(/\D/g, '');
   
