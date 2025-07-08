@@ -126,7 +126,8 @@ export class DatabaseService {
         conta:contas!lancamentos_conta_id_fkey(nome, tipo),
         conta_destino:contas!lancamentos_conta_destino_id_fkey(nome, tipo)
       `)
-      .order('data', { ascending: false });
+      .order('data', { ascending: false })
+      .order('created_at', { ascending: false });
 
     if (filters?.dataInicio) {
       query = query.gte('data', filters.dataInicio);

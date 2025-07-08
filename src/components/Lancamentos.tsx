@@ -275,6 +275,7 @@ export function Lancamentos() {
         // Lançamento individual
         grupos.push({
           ...lancamento,
+          tipo_transacao: lancamento.tipo,
           tipo: 'individual'
         });
         processados.add(lancamento.id);
@@ -720,7 +721,7 @@ export function Lancamentos() {
                         value={formData.numeroParcelas}
                         onChange={(e) => setFormData(prev => ({ ...prev, numeroParcelas: parseInt(e.target.value) }))}
                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                          formErrors.numeroParcelas ? 'border-red-300' : 'border-gray-300'
+                          formErrors.numeroParcelas ? 'border-blue-300' : 'border-gray-300'
                         }`}
                       />
                       {formErrors.numeroParcelas && (
@@ -796,7 +797,11 @@ export function Lancamentos() {
 
                         <div 
                           className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
-                          style={{ backgroundColor: categoria?.cor + '20' }}
+                          style={{ 
+                            backgroundColor: (item.tipo_transacao || item.tipo) === 'RECEITA' 
+                              ? '#10B981' + '20' 
+                              : categoria?.cor + '20' 
+                          }}
                         >
                           {(item.tipo_transacao || item.tipo) === 'RECEITA' ? (
                             <DollarSign className="w-6 h-6 text-green-600" />
@@ -852,7 +857,7 @@ export function Lancamentos() {
                         <div className={`font-semibold text-lg ${
                           (item.tipo_transacao || item.tipo) === 'RECEITA' ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {(item.tipo_transacao || item.tipo) === 'RECEITA' ? '+' : '-'}{formatCurrency(item.valor)}
+                          {(item.tipo_transacao || item.tipo) === 'RECEITA' ? '+ ' : '- '}{formatCurrency(item.valor)}
                         </div>
                         
                         {item.tipo !== 'grupo_parcelas' && (

@@ -15,7 +15,13 @@ import {
   Plus,
   ArrowLeftRight,
   BarChart3,
-  Eye
+  Eye,
+  Clock,
+  CheckCircle,
+  // <<< MUDANÇA: Ícones adicionados para os novos insights.
+  PiggyBank,
+  Info,
+  Scale
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts';
 import { DatabaseService } from '../../lib/database';
@@ -23,6 +29,14 @@ import { AuthService } from '../../lib/auth';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { CHART_COLORS } from '../../constants';
 import type { DashboardData, FinancialSummary, KPI } from '../../types';
+
+// <<< MUDANÇA: Novo tipo para definir a estrutura de cada insight da IA.
+interface AiInsight {
+  title: string;
+  description: string;
+  type: 'positivo' | 'atencao' | 'informativo';
+  icon: string;
+}
 
 interface EnhancedDashboardProps {
   onNavigate?: (page: string) => void;
@@ -39,14 +53,26 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
   });
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('month');
+  
+  // <<< MUDANÇA: O estado agora armazena um array de objetos AiInsight, não uma string.
+  const [aiInsights, setAiInsights] = useState<AiInsight[]>([]);
+  const [loadingInsights, setLoadingInsights] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
   }, [timeRange]);
 
+  useEffect(() => {
+    // <<< MUDANÇA: Lógica ajustada para chamar apenas uma vez quando os dados estiverem prontos.
+    if (data.lancamentos.length > 0 && !loading && aiInsights.length === 0) {
+      loadAIInsights();
+    }
+  }, [data.lancamentos, loading]);
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Carregando dados do dashboard...');
       
       const hoje = new Date();
       let dataInicio: string;
@@ -63,6 +89,7 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
       }
       
       const dataFim = hoje.toISOString().split('T')[0];
+      console.log('📅 Período:', { dataInicio, dataFim });
 
       const [lancamentos, categorias, contas, metas, orcamentos] = await Promise.all([
         DatabaseService.getLancamentos({ dataInicio, dataFim }),
@@ -71,6 +98,14 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
         DatabaseService.getMetas(),
         DatabaseService.getOrcamentos(hoje.getFullYear(), hoje.getMonth() + 1)
       ]);
+
+      console.log('📊 Dados carregados:', {
+        lancamentos: lancamentos.length,
+        categorias: categorias.length,
+        contas: contas.length,
+        metas: metas.length,
+        orcamentos: orcamentos.length
+      });
 
       setData({ 
         kpis: calculateKPIs({ lancamentos, categorias, contas, metas, orcamentos }),
@@ -82,13 +117,51 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
       });
       
     } catch (error) {
-      console.error('Erro ao carregar dados do dashboard:', error);
+      console.error('❌ Erro ao carregar dados do dashboard:', error);
       if (error instanceof Error && error.message === 'Usuário não autenticado') {
         await AuthService.signOut();
         return;
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // <<< MUDANÇA: Função atualizada para processar a resposta JSON da IA.
+  const loadAIInsights = async () => {
+    if (loadingInsights) return; // Evita chamadas duplicadas
+    try {
+      setLoadingInsights(true);
+      
+      const dadosFinanceiros = {
+        receitas: resumoFinanceiro.receitas,
+        despesas: resumoFinanceiro.despesas,
+        saldo: resumoFinanceiro.saldo,
+        taxaPoupanca: resumoFinanceiro.taxaPoupanca,
+        gastoDiarioMedio: resumoFinanceiro.gastoDiarioMedio,
+        patrimonioLiquido: resumoFinanceiro.patrimonioLiquido,
+        totalContas: data.contas.length,
+        totalLancamentos: data.lancamentos.length,
+        categoriasMaisGastas: dadosGraficoPizza.slice(0, 3).map(c => c.nome),
+        periodo: timeRange === 'month' ? 'mês atual' : timeRange === 'quarter' ? 'últimos 3 meses' : 'ano atual'
+      };
+
+      const { AzureOpenAIService } = await import('../../lib/azureOpenAI');
+      const insightsString = await AzureOpenAIService.analisarGastos(dadosFinanceiros);
+      
+      const insightsArray = JSON.parse(insightsString);
+      setAiInsights(insightsArray);
+
+    } catch (error) {
+      console.error('Erro ao carregar ou processar insights da IA:', error);
+      setAiInsights([{ 
+          title: "Insights em breve", 
+          description: "Continue registrando suas finanças para receber análises detalhadas.", 
+          type: 'informativo', 
+          icon: 'Info' 
+      }]);
+    } finally {
+      setLoadingInsights(false);
     }
   };
 
@@ -104,55 +177,14 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
       .reduce((sum, l) => sum + l.valor, 0);
       
     const saldo = receitas - despesas;
-    const taxaPoupanca = receitas > 0 ? ((receitas - despesas) / receitas) * 100 : 0;
     
-    // Calcular gasto diário médio
-    const diasNoMes = new Date().getDate();
-    const gastoDiarioMedio = despesas / diasNoMes;
-    
-    // Calcular saldo líquido total (soma de todas as contas)
     const saldoLiquidoTotal = contas.reduce((sum, conta) => sum + conta.saldo_atual, 0);
     
-    // Calcular limite disponível em cartões
-    const totalLimiteCredito = contas.reduce((sum, conta) => sum + (conta.limite_credito || 0), 0);
-    const totalUsadoCartao = lancamentos
-      .filter(l => l.tipo === 'DESPESA' && l.status === 'CONFIRMADO' && l.cartao_credito_usado)
-      .reduce((sum, l) => sum + l.valor, 0);
-    const limiteDisponivelCartao = totalLimiteCredito - totalUsadoCartao;
-
     return [
-      {
-        label: 'Saldo Líquido Total',
-        value: formatCurrency(saldoLiquidoTotal),
-        change: saldoLiquidoTotal >= 0 ? 1 : -1,
-        trend: saldoLiquidoTotal >= 0 ? 'up' : 'down',
-        color: saldoLiquidoTotal >= 0 ? 'text-green-600' : 'text-red-600',
-        icon: 'Wallet'
-      },
-      {
-        label: 'Limite Disponível Cartão',
-        value: formatCurrency(limiteDisponivelCartao),
-        change: limiteDisponivelCartao > totalLimiteCredito * 0.5 ? 1 : limiteDisponivelCartao > totalLimiteCredito * 0.2 ? 0 : -1,
-        trend: limiteDisponivelCartao > totalLimiteCredito * 0.5 ? 'up' : limiteDisponivelCartao > totalLimiteCredito * 0.2 ? 'stable' : 'down',
-        color: limiteDisponivelCartao > totalLimiteCredito * 0.5 ? 'text-green-600' : limiteDisponivelCartao > totalLimiteCredito * 0.2 ? 'text-yellow-600' : 'text-red-600',
-        icon: 'CreditCard'
-      },
-      {
-        label: 'Saldo do Período',
-        value: formatCurrency(saldo),
-        change: saldo >= 0 ? 1 : -1,
-        trend: saldo >= 0 ? 'up' : 'down',
-        color: saldo >= 0 ? 'text-green-600' : 'text-red-600',
-        icon: 'DollarSign'
-      },
-      {
-        label: 'Taxa de Poupança',
-        value: `${taxaPoupanca.toFixed(1)}%`,
-        change: taxaPoupanca >= 20 ? 1 : taxaPoupanca >= 10 ? 0 : -1,
-        trend: taxaPoupanca >= 20 ? 'up' : taxaPoupanca >= 10 ? 'stable' : 'down',
-        color: taxaPoupanca >= 20 ? 'text-green-600' : taxaPoupanca >= 10 ? 'text-yellow-600' : 'text-red-600',
-        icon: 'Percent'
-      }
+      { label: 'Receitas do Período', value: formatCurrency(receitas), change: receitas > 0 ? 1 : 0, trend: receitas > 0 ? 'up' : 'stable', color: 'text-green-600', icon: 'TrendingUp' },
+      { label: 'Despesas do Período', value: formatCurrency(despesas), change: despesas > 0 ? -1 : 0, trend: despesas > 0 ? 'down' : 'stable', color: 'text-red-600', icon: 'TrendingDown' },
+      { label: 'Saldo do Período', value: formatCurrency(saldo), change: saldo >= 0 ? 1 : -1, trend: saldo >= 0 ? 'up' : 'down', color: saldo >= 0 ? 'text-green-600' : 'text-red-600', icon: 'DollarSign' },
+      { label: 'Saldo Total das Contas', value: formatCurrency(saldoLiquidoTotal), change: saldoLiquidoTotal >= 0 ? 1 : -1, trend: saldoLiquidoTotal >= 0 ? 'up' : 'down', color: saldoLiquidoTotal >= 0 ? 'text-green-600' : 'text-red-600', icon: 'Wallet' }
     ];
   };
 
@@ -171,15 +203,12 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
     const diasNoMes = new Date().getDate();
     const gastoDiarioMedio = despesas / diasNoMes;
     
-    // Calcular patrimônio líquido considerando saldos reais das contas
     const patrimonioLiquido = data.contas.reduce((sum, conta) => sum + conta.saldo_atual, 0);
     
-    // Calcular total disponível em cartões de crédito
     const totalLimiteCredito = data.contas.reduce((sum, conta) => {
       return sum + (conta.limite_credito || 0);
     }, 0);
     
-    // Calcular total usado nos cartões
     const totalUsadoCartao = data.lancamentos
       .filter(l => l.tipo === 'DESPESA' && l.status === 'CONFIRMADO' && l.cartao_credito_usado)
       .reduce((sum, l) => sum + l.valor, 0);
@@ -213,7 +242,7 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
         acc[categoria.id] = {
           nome: categoria.nome,
           valor: 0,
-          cor: categoria.cor,
+          cor: categoria.cor || '#cccccc', // Adicionado fallback de cor
         };
       }
       
@@ -230,6 +259,7 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
       .slice(0, 6);
   }, [data.lancamentos, data.categorias]);
 
+  // <<< MUDANÇA: Função expandida para incluir os novos ícones.
   const getIconComponent = (iconName: string) => {
     const icons = {
       DollarSign,
@@ -239,9 +269,13 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
       TrendingUp: Growth,
       TrendingDown,
       Target,
-      CreditCard
+      CreditCard,
+      AlertCircle,
+      PiggyBank,
+      Info,
+      Scale
     };
-    return icons[iconName as keyof typeof icons] || DollarSign;
+    return icons[iconName as keyof typeof icons] || Info;
   };
 
   if (loading) {
@@ -257,8 +291,8 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl lg:text-4xl font-bold text-gray-900 dark:text-white">Dashboard Inteligente</h1>
-          <p className="text-gray-600 dark:text-gray-300 mt-2">Visão completa e insights das suas finanças</p>
+          <h1 className="text-2xl lg:text-4xl font-bold text-gray-900 dark:text-white">Dashboard Financeiro</h1>
+          <p className="text-gray-600 dark:text-gray-300 mt-2">Visão completa das suas finanças</p>
         </div>
         
         <select
@@ -331,7 +365,7 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
                         kpi.trend === 'down' ? 'text-red-600' : 'text-gray-600 dark:text-gray-400'
                       }`}>
                         {kpi.trend === 'up' ? 'Positivo' : 
-                         kpi.trend === 'down' ? 'Atenção' : 'Estável'}
+                          kpi.trend === 'down' ? 'Negativo' : 'Estável'}
                       </span>
                     </div>
                   )}
@@ -351,47 +385,56 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
         })}
       </div>
 
-      {/* Insights Financeiros */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4 lg:p-6">
+      {/* <<< MUDANÇA: Bloco de renderização dos Insights Inteligentes completamente atualizado */}
+      <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl border border-purple-200 dark:border-purple-800 p-4 lg:p-6">
         <div className="flex items-center space-x-2 mb-4">
-          <Zap className="w-5 h-5 text-blue-600" />
-          <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">Insights Inteligentes</h2>
+          <Zap className="w-5 h-5 text-purple-600" />
+          <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">🤖 Insights Inteligentes</h2>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {resumoFinanceiro.taxaPoupanca >= 20 && (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-              <div className="flex items-center space-x-2">
-                <TrendingUp className="w-5 h-5 text-green-600" />
-                <span className="font-medium text-green-800 dark:text-green-300">Excelente Poupança!</span>
-              </div>
-              <p className="text-sm text-green-700 dark:text-green-400 mt-1">
-                Você está poupando {resumoFinanceiro.taxaPoupanca.toFixed(1)}% da sua renda. Continue assim!
-              </p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-purple-200 dark:border-purple-700 min-h-[120px] flex items-center">
+          {loadingInsights ? (
+            <div className="flex items-center space-x-3">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+              <span className="text-gray-600 dark:text-gray-300">Analisando suas finanças com IA...</span>
             </div>
-          )}
-          
-          {resumoFinanceiro.taxaPoupanca < 10 && resumoFinanceiro.receitas > 0 && (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-              <div className="flex items-center space-x-2">
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
-                <span className="font-medium text-yellow-800 dark:text-yellow-300">Oportunidade de Melhoria</span>
-              </div>
-              <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
-                Sua taxa de poupança está em {resumoFinanceiro.taxaPoupanca.toFixed(1)}%. Tente economizar mais!
-              </p>
-            </div>
-          )}
-          
-          {resumoFinanceiro.gastoDiarioMedio > 0 && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <div className="flex items-center space-x-2">
-                <Calendar className="w-5 h-5 text-blue-600" />
-                <span className="font-medium text-blue-800 dark:text-blue-300">Gasto Diário</span>
-              </div>
-              <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
-                Você gasta em média {formatCurrency(resumoFinanceiro.gastoDiarioMedio)} por dia.
-              </p>
+          ) : (
+            <div className="flex flex-col lg:flex-row flex-wrap gap-4 w-full">
+              {Array.isArray(aiInsights) && aiInsights.length > 0 ? aiInsights.map((insight, index) => {
+                
+                const styleConfig = {
+                  positivo: {
+                    container: 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700',
+                    icon: 'text-green-600 dark:text-green-400',
+                    text: 'text-green-800 dark:text-green-200'
+                  },
+                  atencao: {
+                    container: 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-700',
+                    icon: 'text-yellow-600 dark:text-yellow-400',
+                    text: 'text-yellow-800 dark:text-yellow-200'
+                  },
+                  informativo: {
+                    container: 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700',
+                    icon: 'text-blue-600 dark:text-blue-400',
+                    text: 'text-blue-800 dark:text-blue-200'
+                  },
+                };
+
+                const currentStyle = styleConfig[insight.type] || styleConfig.informativo;
+                const IconComponent = getIconComponent(insight.icon);
+
+                return (
+                  <div key={index} className={`flex-1 min-w-[240px] p-4 rounded-xl border ${currentStyle.container} transition-all`}>
+                    <div className={`flex items-center gap-3 mb-1`}>
+                      <IconComponent className={`w-6 h-6 flex-shrink-0 ${currentStyle.icon}`} />
+                      <h4 className={`font-semibold ${currentStyle.text}`}>{insight.title}</h4>
+                    </div>
+                    <p className={`text-sm pl-9 ${currentStyle.text}`}>{insight.description}</p>
+                  </div>
+                );
+              }) : (
+                <p className="text-gray-500">Não há insights disponíveis no momento.</p>
+              )}
             </div>
           )}
         </div>
@@ -400,12 +443,12 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
       {/* Gráficos */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8">
         {/* Gráfico de Despesas por Categoria */}
+        {/* Gráfico de Despesas por Categoria */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 lg:p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Despesas por Categoria</h3>
           
           {dadosGraficoPizza.length > 0 ? (
             <div className="w-full">
-              {/* Container do gráfico com altura responsiva */}
               <div className="h-48 sm:h-64 w-full mb-4">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -417,6 +460,7 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
                       outerRadius={80}
                       paddingAngle={2}
                       dataKey="valor"
+                      nameKey="nome" // <<< CORREÇÃO APLICADA AQUI
                     >
                       {dadosGraficoPizza.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.cor} />
@@ -424,39 +468,23 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
                     </Pie>
                     <Tooltip
                       formatter={(value: number) => formatCurrency(value)}
-                      labelFormatter={(label) => `Categoria: ${label}`}
-                      contentStyle={{
-                        backgroundColor: 'var(--bg-primary)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '8px',
-                        color: 'var(--text-primary)'
-                      }}
+                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', border: '1px solid #ccc', borderRadius: '8px' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
               
-              {/* Lista de categorias com scroll controlado */}
               <div className="w-full">
                 <div className="max-h-32 sm:max-h-40 overflow-y-auto space-y-2 pr-2">
                   {dadosGraficoPizza.map((item, index) => (
                     <div key={index} className="flex items-center justify-between text-sm py-1">
                       <div className="flex items-center space-x-2 flex-1 min-w-0">
-                        <div 
-                          className="w-3 h-3 rounded-full flex-shrink-0" 
-                          style={{ backgroundColor: item.cor }}
-                        />
-                        <span className="text-gray-700 dark:text-gray-300 truncate font-medium">
-                          {item.nome}
-                        </span>
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.cor }} />
+                        <span className="text-gray-700 dark:text-gray-300 truncate font-medium">{item.nome}</span>
                       </div>
                       <div className="text-right flex-shrink-0 ml-3">
-                        <div className="font-semibold text-gray-900 dark:text-white">
-                          {formatCurrency(item.valor)}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {item.porcentagem.toFixed(1)}%
-                        </div>
+                        <div className="font-semibold text-gray-900 dark:text-white">{formatCurrency(item.valor)}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{item.porcentagem.toFixed(1)}%</div>
                       </div>
                     </div>
                   ))}
@@ -473,80 +501,72 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
           )}
         </div>
 
-        {/* Resumo das Contas */}
+        {/* Últimos Lançamentos */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 lg:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Resumo das Contas</h3>
-            <button
-              onClick={() => onNavigate?.('contas')}
-              className="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1"
-            >
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Últimos Lançamentos</h3>
+            <button onClick={() => onNavigate?.('lancamentos')} className="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1">
               <Eye className="w-4 h-4" />
-              <span>Ver todas</span>
+              <span>Ver todos</span>
             </button>
           </div>
           
-          {data.contas.length > 0 ? (
+          {data.lancamentos.length > 0 ? (
             <div className="space-y-3">
-              {data.contas.slice(0, 5).map((conta) => {
-                const isCartaoCredito = conta.tipo === 'CARTAO_CREDITO';
-                const utilizacao = isCartaoCredito && conta.limite_credito 
-                  ? (Math.abs(conta.saldo_atual) / conta.limite_credito) * 100 
-                  : 0;
-                const alertaLimite = utilizacao > 80;
+              {data.lancamentos.slice(0, 5).map((lancamento) => {
+                const categoria = data.categorias.find(c => c.id === lancamento.categoria_id);
+                const conta = data.contas.find(c => c.id === lancamento.conta_id);
                 
                 return (
-                  <div key={conta.id} className={`flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors ${alertaLimite ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' : ''}`}>
+                  <div key={lancamento.id} className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
                     <div className="flex items-center space-x-3 flex-1 min-w-0">
-                      <div className={`w-8 h-8 lg:w-10 lg:h-10 rounded-lg flex items-center justify-center ${alertaLimite ? 'bg-red-100 dark:bg-red-900/30' : 'bg-blue-50 dark:bg-blue-900/20'}`}>
-                        <CreditCard className={`w-4 h-4 lg:w-5 lg:h-5 ${alertaLimite ? 'text-red-600' : 'text-blue-600'}`} />
+                      <div className={`w-8 h-8 lg:w-10 lg:h-10 rounded-lg flex items-center justify-center ${
+                        lancamento.tipo === 'RECEITA' ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'
+                      }`}>
+                        {lancamento.tipo === 'RECEITA' ? (
+                          <TrendingUp className="w-4 h-4 lg:w-5 lg:h-5 text-green-600" />
+                        ) : (
+                          <TrendingDown className="w-4 h-4 lg:w-5 lg:h-5 text-red-600" />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-2">
-                          <p className="font-medium text-gray-900 dark:text-white truncate">{conta.nome}</p>
-                          {alertaLimite && (
-                            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                          )}
+                          <p className="font-medium text-gray-900 dark:text-white truncate">{lancamento.descricao}</p>
+                          {lancamento.status === 'PENDENTE' && <Clock className="w-4 h-4 text-yellow-500 flex-shrink-0" />}
+                          {lancamento.status === 'CONFIRMADO' && <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />}
                         </div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                          {conta.tipo}
-                          {isCartaoCredito && conta.limite_credito && (
-                            <span className="ml-2">• {utilizacao.toFixed(1)}% usado</span>
-                          )}
-                        </p>
+                        <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+                          <span>{categoria?.nome}</span>
+                          <span>•</span>
+                          <span>{conta?.nome}</span>
+                          <span>•</span>
+                          <span>{formatDate(lancamento.data)}</span>
+                        </div>
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className={`font-semibold ${
-                        conta.saldo_atual >= 0 ? 'text-green-600' : 'text-red-600'
+                        lancamento.tipo === 'RECEITA' ? 'text-green-600' : 'text-red-600'
                       }`}>
-                        {formatCurrency(conta.saldo_atual)}
+                        {lancamento.tipo === 'RECEITA' ? '+' : '-'} {formatCurrency(lancamento.valor)}
                       </p>
-                      {isCartaoCredito && conta.limite_credito && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          Limite: {formatCurrency(conta.limite_credito)}
-                        </p>
-                      )}
                     </div>
                   </div>
                 );
               })}
               
-              {data.contas.length > 5 && (
+              {data.lancamentos.length > 5 && (
                 <div className="text-center pt-2">
-                  <button 
-                    onClick={() => onNavigate?.('contas')}
-                    className="text-sm text-blue-600 hover:text-blue-700"
-                  >
-                    Ver todas as contas ({data.contas.length})
+                  <button onClick={() => onNavigate?.('lancamentos')} className="text-sm text-blue-600 hover:text-blue-700">
+                    Ver todos os lançamentos ({data.lancamentos.length})
                   </button>
                 </div>
               )}
             </div>
           ) : (
             <div className="text-center text-gray-500 dark:text-gray-400 py-8">
-              <CreditCard className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-              <p>Nenhuma conta cadastrada</p>
+              <DollarSign className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+              <p>Nenhum lançamento encontrado</p>
             </div>
           )}
         </div>

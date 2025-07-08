@@ -241,32 +241,50 @@ Responda apenas com o nome da categoria mais apropriada.
 
   static async analisarGastos(dadosFinanceiros: any): Promise<string> {
     const prompt = `
-Analise os seguintes dados financeiros e forneça insights valiosos:
-- Receitas totais: R$ ${dadosFinanceiros.receitas}
-- Despesas totais: R$ ${dadosFinanceiros.despesas}
-- Saldo: R$ ${dadosFinanceiros.saldo}
-- Principais categorias de gastos: ${dadosFinanceiros.categorias?.join(', ') || 'Não informado'}
+Você é um Analista Financeiro Sênior e especialista em visualização de dados. Sua tarefa é analisar os dados financeiros do usuário e retornar *exclusivamente* um array de objetos JSON contendo insights.
 
-Forneça uma análise concisa com:
-1. Avaliação da situação atual
-2. Pontos de atenção
-3. Sugestões específicas de melhoria
-4. Próximos passos recomendados
-`;
-    return this._callOpenAI(prompt);
+**Formato de Saída Obrigatório:**
+A sua resposta deve ser um array JSON. Cada objeto no array representa um insight e deve ter a seguinte estrutura:
+{
+  "title": "Um título curto e impactante para o insight (máx 4 palavras).",
+  "description": "Uma frase explicativa, concisa e acionável (máx 20 palavras).",
+  "type": "A classificação do insight. Use *exclusivamente* um dos seguintes valores: 'positivo', 'atencao', 'informativo'.",
+  "icon": "O nome de um ícone da biblioteca lucide-react que melhor representa o insight. Escolha *exclusivamente* da seguinte lista: ['TrendingUp', 'TrendingDown', 'AlertTriangle', 'PiggyBank', 'CalendarDays', 'Wallet', 'Info', 'Scale']"
+}
+
+**Dados Financeiros do Usuário para o Período de "${dadosFinanceiros.periodo}":**
+- Receitas: R$ ${dadosFinanceiros.receitas?.toFixed(2) || '0.00'}
+- Despesas: R$ ${dadosFinanceiros.despesas?.toFixed(2) || '0.00'}
+- Taxa de Poupança: ${dadosFinanceiros.taxaPoupanca?.toFixed(1) || '0'}%
+- Gasto Diário Médio: R$ ${dadosFinanceiros.gastoDiarioMedio?.toFixed(2) || '0.00'}
+- Patrimônio Líquido: R$ ${dadosFinanceiros.patrimonioLiquido?.toFixed(2) || '0.00'}
+- Principais Categorias de Gastos: ${dadosFinanceiros.categoriasMaisGastas?.join(', ') || 'Nenhuma'}
+
+**Regras para Gerar os Insights:**
+1.  Gere de 2 a 4 insights no total. O primeiro insight deve ser sempre o mais relevante (o maior ponto positivo ou o maior ponto de atenção).
+2.  Se a "Taxa de Poupança" for maior que 20%, crie um insight 'positivo' sobre isso. Se for negativa, crie um de 'atencao'.
+3.  Analise o "Gasto Diário Médio". Se for um valor relevante comparado à receita, crie um insight 'informativo' ou de 'atencao'.
+4.  Se o saldo for negativo, crie um insight de 'atencao' sobre o déficit.
+5.  Use a "Principal Categoria de Gastos" para gerar um insight específico e acionável.
+6.  Seja direto, certeiro e use uma linguagem que motive o usuário a agir.
+
+**Exemplo de Saída Esperada (apenas para referência de formato):**
+[
+  {
+    "title": "Excelente Poupança!",
+    "type": "positivo",
+    "description": "Você está poupando ${dadosFinanceiros.taxaPoupanca?.toFixed(1)}% da sua renda. Continue assim!",
+    "icon": "TrendingUp"
+  },
+  {
+    "title": "Atenção ao Gasto Diário",
+    "type": "atencao",
+    "description": "Seu gasto médio é de R$ ${dadosFinanceiros.gastoDiarioMedio?.toFixed(2)}. Monitore para otimizar.",
+    "icon": "AlertTriangle"
   }
+]
 
-  static async preverGastos(historicoGastos: number[]): Promise<string> {
-    const media = historicoGastos.reduce((a, b) => a + b, 0) / historicoGastos.length;
-    const prompt = `
-Baseado no histórico de gastos mensais: ${historicoGastos.map(g => `R$ ${g.toFixed(2)}`).join(', ')}
-Média mensal: R$ ${media.toFixed(2)}
-
-Forneça:
-1. Previsão para o próximo mês
-2. Tendência observada
-3. Sugestões para otimização dos gastos
-4. Alertas sobre padrões preocupantes (se houver)
+Lembre-se: sua resposta deve conter APENAS o array JSON, sem nenhum texto adicional, explicação ou formatação como \`\`\`json.
 `;
     return this._callOpenAI(prompt);
   }
